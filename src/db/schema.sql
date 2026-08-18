@@ -1,4 +1,4 @@
--- Shop Kanban schema. Runs identically on local SQLite (node:sqlite) and
+-- Community Kanban schema. Runs identically on local SQLite (node:sqlite) and
 -- Cloudflare D1 — both are SQLite. Column names are camelCase so API responses
 -- match the field names the frontend uses.
 

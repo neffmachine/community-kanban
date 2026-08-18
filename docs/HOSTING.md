@@ -1,6 +1,6 @@
 # Hosting guide
 
-Two ways to run Shop Kanban. Pick one — you can switch later; only the data
+Two ways to run Community Kanban. Pick one — you can switch later; only the data
 location differs.
 
 Run the wizard first either way:

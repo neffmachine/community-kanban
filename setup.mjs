@@ -25,7 +25,7 @@ const secret = () => randomBytes(24).toString('hex');
 
 console.log(`
   ┌─────────────────────────────────────────────┐
-  │   Shop Kanban — setup                        │
+  │   Community Kanban — setup                  │
   └─────────────────────────────────────────────┘
 
   Two ways to run this. Pick the one that fits your shop:
@@ -57,7 +57,7 @@ if (mode === 'local') {
     console.log('  Left .env alone.'); rl.close(); process.exit(0);
   }
   writeFileSync('.env', [
-    '# Shop Kanban — local host config. Keep this file out of git (.gitignore already covers it).',
+    '# Community Kanban — local host config. Keep this file out of git (.gitignore already covers it).',
     'HOST_MODE=local',
     `SHOP_NAME=${shopName}`,
     `PORT=${port}`,
@@ -79,7 +79,7 @@ if (mode === 'local') {
   Other devices on your wifi use http://<this-machine-ip>:${port}.
 `);
 } else {
-  const project = await ask('\n  Cloudflare project name (lowercase, no spaces)', 'shop-kanban');
+  const project = await ask('\n  Cloudflare project name (lowercase, no spaces)', 'community-kanban');
   writeFileSync('wrangler.toml', [
     `name = "${project}"`,
     'pages_build_output_dir = "public"',

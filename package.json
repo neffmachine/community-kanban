@@ -1,5 +1,5 @@
 {
-  "name": "shop-kanban",
+  "name": "community-kanban",
   "version": "0.1.0",
   "description": "Self-hosted kanban inventory for machine shops. Run it locally or on your own Cloudflare account — you host your own data.",
   "type": "module",

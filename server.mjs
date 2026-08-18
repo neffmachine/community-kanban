@@ -15,7 +15,7 @@ const app = createApp({ db, config });
 app.use('/*', serveStatic({ root: './public' }));
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
-  console.log(`\n  ${config.shopName} — Shop Kanban`);
+  console.log(`\n  ${config.shopName} — Community Kanban`);
   console.log(`  Running at http://localhost:${info.port}`);
   console.log(`  On your shop's wifi, other devices reach it at http://<this-machine-ip>:${info.port}\n`);
 });

@@ -1,4 +1,4 @@
-# Shop Kanban
+# Community Kanban
 
 A free, self-hosted kanban inventory app for machine shops. Print QR cards for
 your bins; scan a card to drop the item into a reorder queue. **You host your own

@@ -1,4 +1,4 @@
-// The Shop Kanban API. Framework code only — it receives a `db` (SQLite or D1)
+// The Community Kanban API. Framework code only — it receives a `db` (SQLite or D1)
 // and a `config`, so the exact same routes run locally and on Cloudflare.
 import { Hono } from 'hono';
 import { checkPassword, makeSession, requireAuth } from './auth.mjs';

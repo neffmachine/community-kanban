@@ -1,4 +1,4 @@
-# Shop Kanban — porting roadmap
+# Community Kanban — porting roadmap
 
 The starter is the **foundation**: portable login, dual local/Cloudflare database,
 minimal add/list UI. These milestones port the real app onto it, one shippable
