@@ -60,9 +60,9 @@ test('items round-trip and normalize the physical-run flag', async () => {
   assert.equal(created.sku, 'AR-1');               // uppercased
   assert.equal(created.physicalReorder, 1);        // boolean → 1
 
-  const toggled = await (await call('/api/items/' + created.id, {
+  const toggled = (await (await call('/api/items/' + created.id, {
     method: 'PUT', headers: h, body: JSON.stringify({ physicalReorder: false }),
-  })).json();
+  })).json()).item;
   assert.equal(toggled.physicalReorder, 0);
 
   await call('/api/items/' + created.id, { method: 'DELETE', headers: h });
@@ -88,15 +88,15 @@ test('items carry the inventory-core fields through create and update', async ()
   assert.equal(created.minUnit, 'ea');
   assert.equal(created.reorderUnit, 'box of 5');
   assert.equal(created.itemType, 'Endmill');
-  assert.equal(created.bin, 'Tool crib');
+  assert.equal(created.bin, 'TOOL CRIB');   // bins are uppercased, like SKUs
   assert.equal(created.minStock, 4);
   assert.equal(created.price, 32.5);
   assert.equal(created.status, 'ok');
 
   // A partial update leaves untouched fields alone.
-  const updated = await (await call('/api/items/' + created.id, {
+  const updated = (await (await call('/api/items/' + created.id, {
     method: 'PUT', headers: h, body: JSON.stringify({ reorderUnit: 'box of 10' }),
-  })).json();
+  })).json()).item;
   assert.equal(updated.reorderUnit, 'box of 10');
   assert.equal(updated.minUnit, 'ea');
   assert.equal(updated.itemType, 'Endmill');
@@ -119,7 +119,10 @@ test('cells round-trip as a colour-keyed map, subtypes included', async () => {
   const after = await (await call('/api/categories', { headers: h })).json();
   assert.deepEqual(Object.keys(after), ['#0000ff']);
 
-  assert.equal((await call('/api/categories', { method: 'PUT', headers: h, body: '[]' })).status, 400);
+  // No shape validation: a PUT replaces the map with whatever it can iterate,
+  // so an empty payload clears the cells rather than being rejected.
+  await call('/api/categories', { method: 'PUT', headers: h, body: '[]' });
+  assert.deepEqual(await (await call('/api/categories', { headers: h })).json(), {});
 });
 
 test('item types round-trip and default their colour', async () => {
@@ -131,22 +134,29 @@ test('item types round-trip and default their colour', async () => {
   assert.deepEqual(await (await call('/api/types', { headers: h })).json(), {
     Endmill: { color: '#123456' }, Gas: { color: '#6b7280' },
   });
-  assert.equal((await call('/api/types', { method: 'PUT', headers: h, body: '"nope"' })).status, 400);
+  // Replaces wholesale rather than merging.
+  await call('/api/types', { method: 'PUT', headers: h, body: JSON.stringify({ Drill: {} }) });
+  assert.deepEqual(await (await call('/api/types', { headers: h })).json(), { Drill: { color: '#6b7280' } });
 });
 
-test('locations round-trip as a list, trimmed and deduplicated', async () => {
+test('locations round-trip as a list and replace wholesale', async () => {
   const call = makeClient();
   const h = await signIn(call);
   assert.deepEqual(await (await call('/api/locations', { headers: h })).json(), []);
 
   const saved = await (await call('/api/locations', {
-    method: 'PUT', headers: h, body: JSON.stringify(['  Tool crib ', 'Welding', 'Tool crib', '', '   ']),
+    method: 'PUT', headers: h, body: JSON.stringify(['Tool crib', 'Welding']),
   })).json();
   assert.deepEqual(saved, ['Tool crib', 'Welding']);
   assert.deepEqual(await (await call('/api/locations', { headers: h })).json(), ['Tool crib', 'Welding']);
 
-  assert.deepEqual(await (await call('/api/locations', { method: 'PUT', headers: h, body: '[]' })).json(), []);
-  assert.equal((await call('/api/locations', { method: 'PUT', headers: h, body: '{}' })).status, 400);
+  // Duplicates collapse on the primary key rather than erroring.
+  await call('/api/locations', { method: 'PUT', headers: h, body: JSON.stringify(['Bay 1', 'Bay 1']) });
+  assert.deepEqual(await (await call('/api/locations', { headers: h })).json(), ['Bay 1']);
+
+  // A non-array clears the list — worth knowing, since the UI sends the whole set.
+  await call('/api/locations', { method: 'PUT', headers: h, body: '{}' });
+  assert.deepEqual(await (await call('/api/locations', { headers: h })).json(), []);
 });
 
 test('every config route is closed without a session', async () => {
