@@ -1,0 +1,12 @@
+# Cloudflare Pages routing. The pages link to extensionless URLs, and a scanned
+# card lands on /reorder/<id>; 200 rewrites serve the file without changing the
+# address bar. The local server does the same mapping in server.mjs.
+/cart        /cart.html        200
+/cells       /cells.html       200
+/log         /log.html         200
+/receiving   /receiving.html   200
+/locations   /locations.html   200
+/item-types  /item-types.html  200
+/settings    /settings.html    200
+/card-editor /card-editor.html 200
+/reorder/*   /reorder.html     200
