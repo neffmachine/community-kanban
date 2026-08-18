@@ -1,7 +1,7 @@
 {
   "name": "community-kanban",
   "version": "0.1.0",
-  "description": "Self-hosted kanban inventory for machine shops. Run it locally or on your own Cloudflare account — you host your own data.",
+  "description": "Self-hosted kanban inventory for machine shops. Run it locally or on your own Cloudflare account \u2014 you host your own data.",
   "type": "module",
   "license": "MIT",
   "engines": {
@@ -12,7 +12,8 @@
     "dev": "node --env-file=.env server.mjs",
     "start": "node --env-file=.env server.mjs",
     "test": "node --test",
-    "deploy": "wrangler pages deploy public --branch main"
+    "deploy": "wrangler pages deploy public --branch main",
+    "seed:sample": "node --env-file=.env scripts/seed-sample.mjs"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",
