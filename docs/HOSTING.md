@@ -86,6 +86,25 @@ changed `src/db/schema.sql`, apply the change with another `wrangler d1 execute`
 
 ---
 
+## Updating an existing install
+
+New versions sometimes add database columns. How you pick them up depends on
+where your data lives:
+
+- **Local** — nothing to do. The app adds any missing columns when it starts,
+  and leaves your rows alone.
+- **Cloudflare** — re-run the schema (it only creates what is missing), then
+  apply any migration files newer than your install:
+
+  ```bash
+  wrangler d1 execute <your-db> --remote --file=src/db/schema.sql
+  wrangler d1 execute <your-db> --remote --file=src/db/migrations/001-inventory-core.sql
+  ```
+
+  A migration you have already applied fails with `duplicate column name`. That
+  is the expected way to find out it is already there — nothing is wrong, and
+  nothing was changed. A **fresh** database needs only `schema.sql`.
+
 ## Optional: screenshot import
 
 Both hosts support importing an item from a product-page screenshot via Claude

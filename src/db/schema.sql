@@ -9,9 +9,12 @@ CREATE TABLE IF NOT EXISTS items (
   supplier    TEXT    NOT NULL DEFAULT '',
   minStock    INTEGER NOT NULL DEFAULT 1,
   reorderQty  INTEGER NOT NULL DEFAULT 1,
+  minUnit     TEXT    NOT NULL DEFAULT '',   -- unit the min is counted in ("ft", "box")
+  reorderUnit TEXT    NOT NULL DEFAULT '',   -- unit you reorder by; may differ from minUnit
   price       REAL    NOT NULL DEFAULT 0,
   bin         TEXT    NOT NULL DEFAULT '',
   url         TEXT    NOT NULL DEFAULT '',
+  itemType    TEXT    NOT NULL DEFAULT '',   -- free text; itemTypes rows give it a colour
   category    TEXT    NOT NULL DEFAULT '#6b7280',
   photo       TEXT,
   physicalReorder INTEGER NOT NULL DEFAULT 0,  -- 1 = restocked by a physical run (local pickup)
@@ -26,6 +29,12 @@ CREATE TABLE IF NOT EXISTS categories (
   color    TEXT PRIMARY KEY,
   label    TEXT NOT NULL DEFAULT '',
   subtypes TEXT NOT NULL DEFAULT '{}'
+);
+
+-- Item/tool types. Free text on the item; a row here gives that type a colour.
+CREATE TABLE IF NOT EXISTS itemTypes (
+  name  TEXT PRIMARY KEY,
+  color TEXT NOT NULL DEFAULT '#6b7280'
 );
 
 -- Named physical locations.
