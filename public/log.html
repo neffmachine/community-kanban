@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" href="/favicon.png"><link id="favicon" rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KANBAN · Activity Log</title>
+<link rel="stylesheet" href="/theme-tokens.css">
+<!-- Blocking on purpose: deferred, the page paints light then flips. -->
+<script src="/theme.js"></script>
+<script>
+/* The accent used to default to blue, and settings writes whatever the
+ * picker shows on every save — so browsers that never chose a colour
+ * still have that blue stored, where an inline style beats the sheet.
+ * Retiring exactly the old default lets the house rust through; any
+ * other value was a deliberate choice and is left alone. */
+try{var _t=JSON.parse(localStorage.getItem("kanban_settings")||"{}");
+if(_t.accentColor==="#1a4fa8"){delete _t.accentColor;
+localStorage.setItem("kanban_settings",JSON.stringify(_t));}}catch(e){}
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+
+header{background:var(--surface);border-bottom:1px solid var(--line);color:var(--ink);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+:root[data-theme="dark"] header{background:var(--surface)}
+.logo{font-family:var(--mono);font-size:13px;letter-spacing:.08em;font-weight:500;display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none}
+.logo-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.nav-links{display:flex;gap:6px}
+.nav-link{display:flex;align-items:center;gap:6px;color:var(--ink-soft);text-decoration:none;font-size:13px;padding:6px 12px;border-radius:var(--radius);transition:all .15s}
+.nav-link:hover{color:var(--ink);background:var(--surface2)}
+
+.main{max-width:820px;margin:0 auto;padding:28px 24px}
+.page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;gap:16px}
+.page-title{font-size:20px;font-weight:600}
+.page-sub{font-size:13px;color:var(--muted);margin-top:3px}
+
+/* Filter bar */
+.filter-bar{display:flex;gap:8px;align-items:center;margin-bottom:20px;flex-wrap:wrap}
+.type-pill{padding:5px 12px;border-radius:100px;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--surface);cursor:pointer;transition:all .15s;color:var(--muted);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.type-pill:hover{border-color:var(--text);color:var(--text)}
+/* The selected pill needs a fill of its own: setFilter paints one from
+ * the event colour for every type except "all", which is left blank —
+ * so without this the default filter was pale text on a pale pill. */
+.type-pill.active{background:var(--ink);color:var(--paper);border-color:transparent}
+.type-pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.8}
+
+/* Log entries */
+.log-day{margin-bottom:24px}
+.day-label{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border-light)}
+
+.log-entry{display:flex;gap:12px;padding:10px 14px;background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);margin-bottom:6px;align-items:flex-start;transition:border-color .15s}
+.log-entry:hover{border-color:var(--border)}
+.log-entry.reversed{opacity:.45}
+
+.entry-icon{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.entry-body{flex:1;min-width:0}
+.entry-desc{font-size:13px;font-weight:500;margin-bottom:2px;word-break:break-word}
+.entry-meta{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.entry-time{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.reversed-badge{font-size:10px;background:var(--border-light);color:var(--muted);padding:1px 6px;border-radius:3px;font-weight:500}
+
+.reverse-btn{flex-shrink:0;background:none;border:1px solid var(--border);color:var(--muted);font-size:11px;font-family:var(--sans);padding:4px 10px;border-radius:4px;cursor:pointer;transition:all .15s;white-space:nowrap;display:flex;align-items:center;gap:4px;margin-top:1px}
+.reverse-btn:hover{border-color:#a32b1c;color:#a32b1c;background:#fbeae7}
+
+/* Type colors */
+.icon-queue{background:#f6e7e3;color:#c4351c}
+.icon-ordered{background:#fff4d6;color:#8a6116}
+.icon-received{background:#e6f0e7;color:#2f6f43}
+.icon-item_add{background:#e6f0e7;color:#2f6f43}
+.icon-item_edit{background:#f0ede7;color:#5c574d}
+.icon-item_delete{background:#fbeae7;color:#a32b1c}
+.icon-status{background:#f0ede7;color:#5c574d}
+
+.pill-queue{background:#c4351c}
+.pill-ordered{background:#8a6116}
+.pill-received{background:#2f6f43}
+.pill-item_add{background:#2f6f43}
+.pill-item_edit{background:#5c574d}
+.pill-item_delete{background:#a32b1c}
+
+/* Empty */
+.empty{text-align:center;padding:60px 24px;color:var(--muted)}
+.empty-icon{font-size:36px;margin-bottom:12px;opacity:.3}
+.empty h3{font-size:16px;font-weight:500;color:var(--text);margin-bottom:6px}
+
+.flash{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(8px);background:#14120f;color:#fff;padding:10px 20px;border-radius:100px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:999}
+.flash.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (max-width: 640px) {
+  header { height: auto; min-height: 52px; flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; }
+  .logo { font-size: 11px; white-space: nowrap; }
+  .nav-link { font-size: 12px; padding: 6px 8px; }
+  .main { padding: 20px 14px; }
+  .page-header { flex-wrap: wrap; gap: 10px; }
+  .log-entry { gap: 10px; }
+}
+
+
+:root[data-theme="dark"]{--surface2:#2b2721}
+</style>
+</head>
+<body>
+<header>
+  <a href="/" class="logo"><span class="logo-dot" id="headerDot"></span><span id="headerName">YOUR SHOP / ACTIVITY LOG</span></a>
+  <div class="nav-links">
+    <span id="theme-toggle"></span>
+    <a href="/receiving" class="nav-link">Receiving</a>
+    <a href="/cart" class="nav-link">Queue</a>
+    <a href="/" class="nav-link">
+      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      Inventory
+    </a>
+  </div>
+</header>
+
+<div class="main">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Activity Log</div>
+      <div class="page-sub">All inventory events — reverse any action with the undo button</div>
+    </div>
+    <button onclick="load()" style="background:none;border:1px solid var(--border);color:var(--muted);padding:6px 12px;border-radius:var(--radius);cursor:pointer;font-size:12px;font-family:var(--sans);display:flex;align-items:center;gap:5px">
+      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Refresh
+    </button>
+  </div>
+
+  <!-- Filter pills -->
+  <div class="filter-bar">
+    <button class="type-pill active" data-type="all" onclick="setFilter('all',this)"><span class="dot"></span>All</button>
+    <button class="type-pill" data-type="queue" onclick="setFilter('queue',this)" style="--pc:#c4351c"><span class="dot" style="color:#c4351c"></span>Queue</button>
+    <button class="type-pill" data-type="ordered" onclick="setFilter('ordered',this)"><span class="dot" style="color:#8a6116"></span>Ordered</button>
+    <button class="type-pill" data-type="received" onclick="setFilter('received',this)"><span class="dot" style="color:#2f6f43"></span>Received</button>
+    <button class="type-pill" data-type="item_add" onclick="setFilter('item_add',this)"><span class="dot" style="color:#2f6f43"></span>Added</button>
+    <button class="type-pill" data-type="item_edit" onclick="setFilter('item_edit',this)"><span class="dot" style="color:#5c574d"></span>Edited</button>
+    <button class="type-pill" data-type="item_delete" onclick="setFilter('item_delete',this)"><span class="dot" style="color:#a32b1c"></span>Deleted</button>
+  </div>
+
+  <div id="logContent"></div>
+</div>
+
+<div class="flash" id="flash"></div>
+
+<script>
+let entries = [];
+let activeFilter = 'all';
+let flashTimer;
+
+const TYPE_CONFIG = {
+  queue:       { label: 'Queued',   iconSvg: '<circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>' },
+  ordered:     { label: 'Ordered',  iconSvg: '<path d="M5 12h14M12 5l7 7-7 7"/>' },
+  received:    { label: 'Received', iconSvg: '<polyline points="20 6 9 17 4 12"/>' },
+  item_add:    { label: 'Added',    iconSvg: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>' },
+  item_edit:   { label: 'Edited',   iconSvg: '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>' },
+  item_delete: { label: 'Deleted',  iconSvg: '<path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>' },
+  status:      { label: 'Status',   iconSvg: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>' },
+};
+
+function applySettings() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.accentColor) document.documentElement.style.setProperty('--accent', s.accentColor);
+  const name = (s.shopName||'YOUR SHOP').toUpperCase();
+  document.getElementById('headerDot').style.background = s.accentColor||'#c4351c';
+  document.getElementById('headerName').textContent = name + ' / ACTIVITY LOG';
+}
+
+async function load() {
+  const res = await fetch('/api/log');
+  entries = await res.json();
+  render();
+}
+
+function setFilter(type, el) {
+  activeFilter = type;
+  document.querySelectorAll('.type-pill').forEach(p => {
+    p.classList.toggle('active', p.dataset.type === type);
+    if (p.dataset.type === type && type !== 'all') {
+      p.style.background = getTypeColor(type);
+    } else if (p.dataset.type === type) {
+      p.style.background = '';
+    } else {
+      p.style.background = '';
+    }
+  });
+  render();
+}
+
+function getTypeColor(type) {
+  const colors = {queue:'#c4351c',ordered:'#8a6116',received:'#2f6f43',item_add:'#2f6f43',item_edit:'#5c574d',item_delete:'#a32b1c',status:'#5c574d'};
+  return colors[type]||'#6b7280';
+}
+
+function render() {
+  const filtered = activeFilter==='all' ? entries : entries.filter(e=>e.type===activeFilter);
+  const content = document.getElementById('logContent');
+
+  if (!filtered.length) {
+    content.innerHTML = `<div class="empty"><div class="empty-icon">📋</div><h3>No events yet</h3><p>Actions will appear here as you use the system.</p></div>`;
+    return;
+  }
+
+  // Group by day
+  const days = {};
+  filtered.forEach(e => {
+    const d = new Date(e.timestamp);
+    const key = d.toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+    if (!days[key]) days[key] = [];
+    days[key].push(e);
+  });
+
+  content.innerHTML = Object.entries(days).map(([day, dayEntries]) => `
+    <div class="log-day">
+      <div class="day-label">${day}</div>
+      ${dayEntries.map(e => renderEntry(e)).join('')}
+    </div>
+  `).join('');
+}
+
+function renderEntry(e) {
+  const cfg = TYPE_CONFIG[e.type] || TYPE_CONFIG.status;
+  const t = new Date(e.timestamp);
+  const timeStr = t.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+  const canReverse = e.reversible && !e.reversed;
+
+  return `<div class="log-entry ${e.reversed?'reversed':''}" id="entry-${e.id}">
+    <div class="entry-icon icon-${e.type}">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">${cfg.iconSvg}</svg>
+    </div>
+    <div class="entry-body">
+      <div class="entry-desc">${esc(e.description)}</div>
+      <div class="entry-meta">
+        <span class="entry-time">${timeStr}</span>
+        <span style="font-size:10px;font-weight:600;padding:1px 7px;border-radius:3px;background:${getTypeColor(e.type)}22;color:${getTypeColor(e.type)}">${cfg.label}</span>
+        ${e.reversed?'<span class="reversed-badge">Reversed</span>':''}
+      </div>
+    </div>
+    ${canReverse ? `
+    <button class="reverse-btn" onclick="reverseEntry('${e.id}',this)">
+      <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.85"/></svg>
+      Undo
+    </button>` : ''}
+  </div>`;
+}
+
+async function reverseEntry(id, btn) {
+  btn.disabled = true;
+  btn.textContent = 'Reversing...';
+  const res = await fetch(`/api/log/reverse/${id}`, { method:'POST' });
+  if (res.ok) {
+    showFlash('Action reversed successfully');
+    await load();
+  } else {
+    const err = await res.json();
+    showFlash('Could not reverse: ' + (err.error||'unknown error'));
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.85"/></svg> Undo`;
+  }
+}
+
+function showFlash(msg) {
+  const el = document.getElementById('flash');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+applySettings();
+load();
+
+// Update favicon from shop logo
+function updateFavicon() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.shopLogo) {
+    const link = document.getElementById('favicon');
+    if (link) link.href = s.shopLogo;
+  }
+}
+updateFavicon();
+</script>
+<script>window.SHOP_APP_ID = "kanban";</script>
+</body>
+</html>

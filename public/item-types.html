@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" href="/favicon.png"><link id="favicon" rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KANBAN · Item Types</title>
+<link rel="stylesheet" href="/theme-tokens.css">
+<!-- Blocking on purpose: deferred, the page paints light then flips. -->
+<script src="/theme.js"></script>
+<script>
+/* The accent used to default to blue, and settings writes whatever the
+ * picker shows on every save — so browsers that never chose a colour
+ * still have that blue stored, where an inline style beats the sheet.
+ * Retiring exactly the old default lets the house rust through; any
+ * other value was a deliberate choice and is left alone. */
+try{var _t=JSON.parse(localStorage.getItem("kanban_settings")||"{}");
+if(_t.accentColor==="#1a4fa8"){delete _t.accentColor;
+localStorage.setItem("kanban_settings",JSON.stringify(_t));}}catch(e){}
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+header{background:var(--surface);border-bottom:1px solid var(--line);color:var(--ink);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
+:root[data-theme="dark"] header{background:var(--surface)}
+.logo{font-family:var(--mono);font-size:13px;letter-spacing:.08em;font-weight:500;display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none}
+.logo-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.nav{display:flex;gap:6px}
+.nav-link{display:flex;align-items:center;gap:5px;color:var(--ink-soft);text-decoration:none;font-size:13px;padding:6px 12px;border-radius:var(--radius);transition:all .15s}
+.nav-link:hover{color:var(--ink);background:var(--surface2)}
+
+/* Layout */
+.layout{display:grid;grid-template-columns:1fr 340px;min-height:calc(100vh - 56px)}
+.col-main{padding:28px 28px 100px;overflow-y:auto}
+.col-side{background:var(--bg);border-left:1px solid var(--border-light);padding:20px;overflow-y:auto;position:sticky;top:56px;max-height:calc(100vh - 56px)}
+
+.page-title{font-size:20px;font-weight:600;margin-bottom:4px}
+.page-sub{font-size:13px;color:var(--muted);margin-bottom:28px;line-height:1.5}
+
+/* Category sections */
+.category-section{margin-bottom:28px;border:1px solid var(--border-light);border-radius:10px;overflow:hidden;background:var(--surface);box-shadow:var(--shadow)}
+.cat-header{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border-light);background:var(--bg)}
+.cat-color-bar{width:6px;height:36px;border-radius:3px;flex-shrink:0;cursor:pointer;position:relative}
+.cat-color-bar input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.cat-header-info{flex:1;min-width:0}
+.cat-name{font-size:15px;font-weight:700;margin-bottom:1px}
+.cat-desc{font-size:12px;color:var(--muted)}
+.cat-header-actions{display:flex;gap:6px;align-items:center}
+.cat-count{font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--border-light);padding:2px 9px;border-radius:100px}
+
+/* Types list within a category */
+.types-list{padding:8px 0}
+.type-row{display:flex;align-items:center;gap:10px;padding:7px 18px;transition:background .1s}
+.type-row:hover{background:var(--bg)}
+.type-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.type-name{flex:1;font-size:13px;font-weight:500;text-transform:capitalize;cursor:pointer}
+.type-name:hover{color:var(--accent)}
+.mini-swatch{width:36px;height:22px;border-radius:3px;flex-shrink:0;font-size:6px;font-family:var(--mono);display:flex;align-items:center;padding:0 4px;color:#fff;opacity:.85;font-weight:600;letter-spacing:.04em;overflow:hidden}
+.type-del{background:none;border:none;cursor:pointer;color:var(--muted);padding:3px;border-radius:3px;display:flex;opacity:0;transition:all .15s}
+.type-row:hover .type-del{opacity:1}
+.type-del:hover{background:#fbeae7;color:#a32b1c}
+
+/* Add type row */
+.add-type-row{display:flex;align-items:center;gap:8px;padding:10px 18px 14px;border-top:1px solid var(--border-light)}
+.add-type-row input[type=text]{flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:12px;background:var(--surface);color:var(--text);outline:none}
+.add-type-row input[type=text]:focus{border-color:var(--accent)}
+
+/* Add category button */
+.add-cat-btn{display:flex;align-items:center;gap:8px;padding:14px 18px;background:var(--surface);border:1.5px dashed var(--border);border-radius:10px;cursor:pointer;color:var(--muted);font-size:13px;font-family:var(--sans);transition:all .15s;width:100%;margin-bottom:28px}
+.add-cat-btn:hover{border-color:var(--accent);color:var(--accent);background:color-mix(in srgb,var(--accent) 4%,var(--surface))}
+
+/* Side panel */
+.side-card{background:var(--surface);border:1px solid var(--border-light);border-radius:10px;padding:18px;box-shadow:var(--shadow);margin-bottom:16px}
+.side-title{font-size:14px;font-weight:600;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between}
+.form-label{display:block;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px}
+.form-row{margin-bottom:14px}
+input[type=text]{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:13px;background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
+input[type=text]:focus{border-color:var(--accent)}
+textarea.form-input{width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:13px;background:var(--surface);color:var(--text);outline:none;resize:none;height:60px}
+textarea.form-input:focus{border-color:var(--accent)}
+
+/* Color presets */
+.color-presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.preset{width:26px;height:26px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:transform .15s,border-color .15s}
+.preset:hover{transform:scale(1.12)}
+.preset.active{border-color:var(--text);transform:scale(1.08)}
+.color-row{display:flex;align-items:center;gap:8px}
+input[type=color]{width:40px;height:34px;padding:2px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer}
+.hex-label{font-family:var(--mono);font-size:12px;color:var(--muted);flex:1}
+
+/* Card preview */
+.preview-block{margin-top:14px;padding-top:14px;border-top:1px solid var(--border-light)}
+.preview-mini{width:160px;border:1.5px solid #ccc;border-radius:4px;overflow:hidden;font-family:var(--mono);font-size:6px;margin:0 auto}
+.preview-hdr{height:18px;padding:0 8px;display:flex;align-items:center;justify-content:space-between}
+.preview-hdr span{color:#fff;opacity:.7;letter-spacing:.06em}
+.preview-body{background:#fff;padding:8px}
+.preview-t1{font-size:9px;font-weight:700;color:#14120f;margin-bottom:2px;font-family:'IBM Plex Sans',sans-serif}
+.preview-t2{font-size:7px;color:#5c574d}
+
+/* Auto-detect tester */
+.detect-input-wrap{display:flex;gap:8px}
+.detect-result{padding:8px 12px;background:var(--bg);border-radius:var(--radius);font-size:12px;min-height:36px;display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.detect-badge{padding:3px 9px;border-radius:100px;font-size:11px;font-weight:600;color:#fff;white-space:nowrap}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all .15s;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{opacity:.88}
+.btn-ghost{background:transparent;color:var(--muted);border-color:var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:var(--text)}
+.btn-danger{background:transparent;color:#a32b1c;border-color:#fbeae7}
+.btn-danger:hover{background:#fbeae7}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn-xs{padding:3px 9px;font-size:11px;border-radius:4px}
+
+/* Save bar */
+.save-bar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border-light);padding:12px 28px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 -4px 12px rgba(0,0,0,.06);z-index:10}
+.saved-msg{font-size:12px;color:#2f6f43;opacity:0;transition:opacity .3s}
+.saved-msg.show{opacity:1}
+.flash{position:fixed;bottom:64px;left:50%;transform:translateX(-50%) translateY(8px);background:#14120f;color:#fff;padding:9px 18px;border-radius:100px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:999}
+.flash.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (max-width: 640px) {
+  header { height: auto; min-height: 52px; flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; }
+  .logo { font-size: 11px; white-space: nowrap; }
+  .nav { gap: 8px; flex-wrap: wrap; }
+  .nav-link { font-size: 12px; }
+  .layout { grid-template-columns: 1fr; padding: 16px 14px; gap: 20px; }
+  .cat-header { flex-wrap: wrap; gap: 8px; }
+  .cat-header-actions { flex-wrap: wrap; }
+  .type-row { flex-wrap: wrap; gap: 8px; }
+  .add-type-row { flex-wrap: wrap; }
+}
+
+
+:root[data-theme="dark"]{--surface2:#2b2721}
+</style>
+</head>
+<body>
+<header>
+  <a href="/" class="logo"><span class="logo-dot" id="headerDot"></span><span id="headerName">YOUR SHOP / ITEM TYPES</span></a>
+  <div class="nav">
+    <span id="theme-toggle"></span>
+    <a href="/settings.html" class="nav-link">Settings</a>
+    <a href="/" class="nav-link">← Inventory</a>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- LEFT: categories + types -->
+  <div class="col-main">
+    <div class="page-title">Item Types & Colors</div>
+    <div class="page-sub">
+      <strong>Categories</strong> are the color groups (e.g. Aluminum Cutting = green). 
+      <strong>Types</strong> are the actual values assigned to items (e.g. "flat end mill" lives under Aluminum Cutting). 
+      Label header colors come from whichever category a type belongs to.
+      Add new categories — like "Cleaning Products" — and give them their own color and types.
+    </div>
+
+    <div id="categoriesContent"></div>
+
+    <button class="add-cat-btn" onclick="openNewCat()">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add new category
+    </button>
+  </div>
+
+  <!-- RIGHT: editor + auto-detect -->
+  <div class="col-side">
+    <div class="side-card" id="editorCard">
+      <div class="side-title">
+        <span id="edTitle">Select to edit</span>
+        <button onclick="closeEditor()" id="edClose" style="display:none;background:none;border:none;cursor:pointer;color:var(--muted);font-size:16px">✕</button>
+      </div>
+      <div id="edBody" style="color:var(--muted);font-size:13px;line-height:1.6">
+        Click a category name or type to edit it, or use the buttons to add new ones.
+      </div>
+    </div>
+
+    <!-- Auto-detect tester -->
+    <div class="side-card">
+      <div class="side-title" style="font-size:13px">Auto-detect tester</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;line-height:1.5">Paste a tool description to see what type would be auto-assigned.</p>
+      <input type="text" id="detectInput" placeholder="e.g. 1/4&quot; 3FL End Mill" oninput="runDetect()">
+      <div class="detect-result" id="detectResult" style="color:var(--muted)">Type something above...</div>
+    </div>
+  </div>
+</div>
+
+<div class="save-bar">
+  <span class="saved-msg" id="savedMsg">✓ Saved</span>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span style="font-size:12px;color:var(--muted)" id="statsLabel"></span>
+    <button class="btn btn-primary" onclick="saveAll()">Save changes</button>
+  </div>
+</div>
+<div class="flash" id="flash"></div>
+
+<script>
+let types = {};      // { typeName: { color, category } }
+let cats = {};       // { color: { label, description } }
+let dirty = false;
+let editMode = null; // 'cat' | 'type' | 'newcat' | 'newtype'
+let editKey = null;  // color for cat, typeName for type
+let editCatColor = null; // for newtype, which category
+let flashTimer;
+
+function applySettings() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.accentColor) document.documentElement.style.setProperty('--accent', s.accentColor);
+  const name = (s.shopName||'YOUR SHOP').toUpperCase();
+  document.getElementById('headerDot').style.background = s.accentColor||'#c4351c';
+  document.getElementById('headerName').textContent = name + ' / ITEM TYPES';
+}
+
+async function load() {
+  const [tr, cr] = await Promise.all([fetch('/api/types'), fetch('/api/categories')]);
+  types = await tr.json();
+  cats = await cr.json();
+  render();
+}
+
+function render() {
+  renderCategories();
+  document.getElementById('statsLabel').textContent =
+    `${Object.keys(cats).length} categories · ${Object.keys(types).length} types`;
+}
+
+function renderCategories() {
+  // Sort cats — fixed color order first, then custom
+  const fixedOrder = ['#1a7a3a','#1a4fa8','#c41e1e','#b8860a','#c95e0a','#6d28d9','#6b7280'];
+  const catEntries = Object.entries(cats).sort((a, b) => {
+    const ai = fixedOrder.indexOf(a[0]), bi = fixedOrder.indexOf(b[0]);
+    if (ai === -1 && bi === -1) return a[1].label.localeCompare(b[1].label);
+    if (ai === -1) return 1; if (bi === -1) return -1;
+    return ai - bi;
+  });
+
+  document.getElementById('categoriesContent').innerHTML = catEntries.map(([color, cat]) => {
+    const catTypes = Object.entries(types)
+      .filter(([, cfg]) => cfg.color === color)
+      .sort((a,b) => a[0].localeCompare(b[0]));
+
+    return `<div class="category-section" id="cat-${CSS.escape(color)}">
+      <div class="cat-header">
+        <div class="cat-color-bar" style="background:${color}" title="Click to change color">
+          <input type="color" value="${color}" onchange="changeCatColor('${escAttr(color)}', this.value)">
+        </div>
+        <div class="cat-header-info">
+          <div class="cat-name" onclick="openCatEditor('${escAttr(color)}')" style="cursor:pointer" title="Click to edit">${esc(cat.label)}</div>
+          <div class="cat-desc">${esc(cat.description||'')}</div>
+        </div>
+        <div class="cat-header-actions">
+          <span class="cat-count">${catTypes.length}</span>
+          <button class="btn btn-ghost btn-xs" onclick="openCatEditor('${escAttr(color)}')">Edit</button>
+          <button class="btn btn-ghost btn-xs" style="color:#9b2020;border-color:#fdeaea" onclick="deleteCat('${escAttr(color)}')">Delete</button>
+        </div>
+      </div>
+      <div class="types-list">
+        ${catTypes.map(([name]) => `
+          <div class="type-row">
+            <div class="type-dot" style="background:${color}"></div>
+            <div class="type-name" onclick="openTypeEditor('${escAttr(name)}')">${esc(name.replace(/\b\w/g,c=>c.toUpperCase()))}</div>
+            <div class="mini-swatch" style="background:${color}">${esc(name.substring(0,6))}</div>
+            <button class="type-del" onclick="deleteType('${escAttr(name)}')" title="Delete type">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>`).join('')}
+        <div class="add-type-row">
+          <input type="text" placeholder="Add type to this category..." id="newtype-${CSS.escape(color)}"
+            onkeydown="if(event.key==='Enter')addTypeTocat('${escAttr(color)}',this)">
+          <button class="btn btn-ghost btn-xs" onclick="addTypeTocat('${escAttr(color)}',document.getElementById('newtype-${CSS.escape(color)}'))">Add</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── Category editing ───────────────────────────────────────
+function openCatEditor(color) {
+  editMode = 'cat'; editKey = color;
+  const cat = cats[color] || {};
+  document.getElementById('edTitle').textContent = 'Edit category';
+  document.getElementById('edClose').style.display = 'block';
+  document.getElementById('edBody').innerHTML = catEditorHTML(color, cat.label||'', cat.description||'');
+}
+
+function openNewCat() {
+  editMode = 'newcat'; editKey = null;
+  document.getElementById('edTitle').textContent = 'New category';
+  document.getElementById('edClose').style.display = 'block';
+  document.getElementById('edBody').innerHTML = catEditorHTML('#6b7280', '', '');
+}
+
+function catEditorHTML(color, label, desc) {
+  const presets = ['#1a7a3a','#1a4fa8','#c41e1e','#b8860a','#c95e0a','#6d28d9','#6b7280','#0f766e','#be185d','#1a1916'];
+  return `
+    <div class="form-row">
+      <label class="form-label">Category name</label>
+      <input type="text" id="edCatLabel" value="${esc(label)}" placeholder="e.g. Cleaning Products">
+    </div>
+    <div class="form-row">
+      <label class="form-label">Description</label>
+      <textarea class="form-input" id="edCatDesc" placeholder="Brief description...">${esc(desc)}</textarea>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Color</label>
+      <div class="color-presets">${presets.map(c=>`<div class="preset ${c===color?'active':''}" style="background:${c}" onclick="catPickColor('${c}')" title="${c}"></div>`).join('')}</div>
+      <div class="color-row">
+        <input type="color" id="edCatColor" value="${color}" oninput="catPickColor(this.value)">
+        <span class="hex-label" id="edCatHex">${color}</span>
+      </div>
+    </div>
+    <div class="preview-block">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Preview</div>
+      <div class="preview-mini">
+        <div class="preview-hdr" id="edCatPrevHdr" style="background:${color}">
+          <span>YOUR SHOP</span><span style="background:rgba(255,255,255,.2);padding:0 3px;border-radius:2px">A-01</span>
+        </div>
+        <div class="preview-body">
+          <div class="preview-t1">${label||'Category name'}</div>
+          <div class="preview-t2">Part# · SKU</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary btn-sm" style="flex:1" onclick="${editMode==='newcat'?'saveNewCat()':'saveCatEdit()'}">
+        ${editMode==='newcat'?'Create category':'Save changes'}
+      </button>
+      ${editMode==='cat'?`<button class="btn btn-danger btn-sm" onclick="deleteCat('${escAttr(editKey)}')">Delete</button>`:''}
+    </div>`;
+}
+
+function catPickColor(color) {
+  document.getElementById('edCatColor').value = color;
+  document.getElementById('edCatHex').textContent = color;
+  document.querySelectorAll('.preset').forEach(p => p.classList.toggle('active', p.title === color));
+  const hdr = document.getElementById('edCatPrevHdr');
+  if (hdr) hdr.style.background = color;
+}
+
+function saveNewCat() {
+  const label = document.getElementById('edCatLabel').value.trim();
+  const desc = document.getElementById('edCatDesc').value.trim();
+  const color = document.getElementById('edCatColor').value;
+  if (!label) { document.getElementById('edCatLabel').focus(); return; }
+  if (cats[color]) { showFlash('A category with this color already exists — change the color'); return; }
+  cats[color] = { label, description: desc };
+  dirty = true; render(); closeEditor(); showFlash(`Added category "${label}"`);
+}
+
+function saveCatEdit() {
+  const oldColor = editKey;
+  const newColor = document.getElementById('edCatColor').value;
+  const label = document.getElementById('edCatLabel').value.trim();
+  const desc = document.getElementById('edCatDesc').value.trim();
+  if (!label) return;
+  if (newColor !== oldColor) {
+    // Color changed — migrate all types and track remap for items
+    delete cats[oldColor];
+    cats[newColor] = { label, description: desc };
+    Object.entries(types).forEach(([name, cfg]) => {
+      if (cfg.color === oldColor) types[name] = { ...cfg, color: newColor };
+    });
+    // Track remap — handle chained remaps
+    const existingOld = Object.entries(colorRemaps).find(([o, n]) => n === oldColor);
+    if (existingOld) colorRemaps[existingOld[0]] = newColor;
+    else colorRemaps[oldColor] = newColor;
+  } else {
+    cats[oldColor] = { label, description: desc };
+  }
+  dirty = true; render(); closeEditor(); showFlash(`Saved "${label}"`);
+}
+
+let colorRemaps = {}; // oldColor -> newColor
+
+function changeCatColor(oldColor, newColor) {
+  if (!newColor || newColor === oldColor) return;
+  if (cats[newColor]) { showFlash('Color already used by another category'); return; }
+  const cat = cats[oldColor];
+  delete cats[oldColor];
+  cats[newColor] = cat;
+  Object.entries(types).forEach(([name, cfg]) => {
+    if (cfg.color === oldColor) types[name] = { ...cfg, color: newColor };
+  });
+  // Track the remap so we can update items on save
+  // Handle chained remaps: if oldColor was already a target, update the chain
+  const existingOld = Object.entries(colorRemaps).find(([o, n]) => n === oldColor);
+  if (existingOld) colorRemaps[existingOld[0]] = newColor;
+  else colorRemaps[oldColor] = newColor;
+  dirty = true; render();
+}
+
+function deleteCat(color) {
+  const cat = cats[color];
+  const typeCount = Object.values(types).filter(t => t.color === color).length;
+  const msg = typeCount > 0
+    ? `Delete category "${cat?.label}"?\n\n${typeCount} type(s) under this category will be moved to Other (grey).`
+    : `Delete category "${cat?.label}"?`;
+  if (!confirm(msg)) return;
+  // Move orphaned types to grey
+  Object.entries(types).forEach(([name, cfg]) => {
+    if (cfg.color === color) types[name] = { ...cfg, color: '#6b7280' };
+  });
+  delete cats[color];
+  dirty = true; render(); closeEditor(); showFlash(`Deleted category`);
+}
+
+// ── Type editing ───────────────────────────────────────────
+function openTypeEditor(name) {
+  editMode = 'type'; editKey = name;
+  const cfg = types[name] || {};
+  document.getElementById('edTitle').textContent = 'Edit type';
+  document.getElementById('edClose').style.display = 'block';
+  document.getElementById('edBody').innerHTML = typeEditorHTML(name, cfg.color);
+}
+
+function typeEditorHTML(name, currentColor) {
+  const catEntries = Object.entries(cats).sort((a,b) => a[1].label.localeCompare(b[1].label));
+  return `
+    <div class="form-row">
+      <label class="form-label">Type name</label>
+      <input type="text" id="edTypeName" value="${esc(name)}" placeholder="e.g. flat end mill">
+      <p style="font-size:11px;color:var(--muted);margin-top:4px">Lowercase, matches what's stored on items</p>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Category (sets label color)</label>
+      <select id="edTypeCat" onchange="updateTypeCatPreview(this.value)" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:13px;background:var(--surface);color:var(--text);outline:none">
+        ${catEntries.map(([color, cat]) =>
+          `<option value="${color}" ${color===currentColor?'selected':''}>${esc(cat.label)}</option>`
+        ).join('')}
+      </select>
+    </div>
+    <div class="preview-block">
+      <div style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Preview</div>
+      <div class="preview-mini">
+        <div class="preview-hdr" id="edTypePrevHdr" style="background:${currentColor||'#6b7280'}">
+          <span>YOUR SHOP</span>
+        </div>
+        <div class="preview-body">
+          <div class="preview-t1">${esc(name.replace(/\b\w/g,c=>c.toUpperCase()))}</div>
+          <div class="preview-t2">Part# · SKU</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-primary btn-sm" style="flex:1" onclick="saveTypeEdit()">Save</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteType('${escAttr(name)}')">Delete</button>
+    </div>`;
+}
+
+function updateTypeCatPreview(color) {
+  const hdr = document.getElementById('edTypePrevHdr');
+  if (hdr) hdr.style.background = color || '#6b7280';
+}
+
+function saveTypeEdit() {
+  const newName = document.getElementById('edTypeName').value.trim().toLowerCase();
+  const newColor = document.getElementById('edTypeCat').value;
+  const oldName = editKey;
+  if (!newName) return;
+  if (newName !== oldName && types[newName]) { showFlash(`"${newName}" already exists`); return; }
+  if (newName !== oldName) {
+    delete types[oldName];
+  }
+  types[newName] = { color: newColor, category: cats[newColor]?.label || '' };
+  dirty = true; render(); closeEditor(); showFlash(`Saved "${newName}"`);
+}
+
+function addTypeTocat(color, inputEl) {
+  const name = inputEl.value.trim().toLowerCase();
+  if (!name) { inputEl.focus(); return; }
+  if (types[name]) { showFlash(`"${name}" already exists`); inputEl.select(); return; }
+  types[name] = { color, category: cats[color]?.label || '' };
+  inputEl.value = '';
+  dirty = true; render(); showFlash(`Added "${name}"`);
+}
+
+function deleteType(name) {
+  if (!confirm(`Delete type "${name}"?\n\nItems using this type will lose their label color.`)) return;
+  delete types[name];
+  dirty = true; render();
+  if (editKey === name) closeEditor();
+  showFlash(`Deleted "${name}"`);
+}
+
+function closeEditor() {
+  editMode = null; editKey = null;
+  document.getElementById('edTitle').textContent = 'Select to edit';
+  document.getElementById('edClose').style.display = 'none';
+  document.getElementById('edBody').innerHTML = '<span style="color:var(--muted);font-size:13px">Click a category or type to edit it.</span>';
+}
+
+// ── Auto-detect ────────────────────────────────────────────
+function runDetect() {
+  const text = document.getElementById('detectInput').value.trim();
+  const result = document.getElementById('detectResult');
+  if (!text) { result.innerHTML = '<span style="color:var(--muted)">Type something above...</span>'; return; }
+  const t = text.toLowerCase();
+  let detectedType = null;
+  // Exact same logic as inventory page
+  if (/tap|thread\s*mill|threadmill|\d+\s*tpi|npt|spiral flute tap|roll tap|form tap|sti tap/i.test(t)) {
+    detectedType = Object.keys(types).find(n => /tap|thread mill/.test(n)) || 'tap right hand';
+  } else if (/\bdrill\b|reamer|countersink|counterbore|spot drill|center drill|boring/i.test(t)) {
+    detectedType = Object.keys(types).find(n => /^drill$|reamer|countersink/.test(n)) || 'drill';
+  } else if (/\binsert\b|cnmg|ccmt|tcmt|apmt|wnmg|dnmg|indexable/i.test(t)) {
+    detectedType = Object.keys(types).find(n => /^insert$|indexable/.test(n)) || 'insert';
+  } else if (/dovetail|keyseat|key seat|back.?chamfer|engrav|tapered ball|lollipop/i.test(t)) {
+    detectedType = Object.keys(types).find(n => /dovetail|keyseat|engrav|specialty/.test(n)) || 'specialty';
+  } else if (/\d+\s*fl|\d+\s*flute|end\s*mill|endmill|ball.*mill|bull.*nose|chamfer.*mill|slot.*mill|face.*mill|form.*mill|axfps|e-cut|supracarb|multicut|polychrom|sphericut|finisher|rougher/i.test(t)) {
+    detectedType = Object.keys(types).find(n => /flat end mill \(aluminum\)/.test(n)) || 'flat end mill (aluminum)';
+  }
+  if (detectedType && types[detectedType]) {
+    const color = types[detectedType].color;
+    const catLabel = cats[color]?.label || '';
+    result.innerHTML = `
+      <span class="detect-badge" style="background:${color}">${esc(detectedType)}</span>
+      <span style="font-size:11px;color:var(--muted)">${esc(catLabel)}</span>`;
+  } else {
+    result.innerHTML = `<span style="color:var(--muted);font-size:12px">No match — would stay untyped (or assign manually)</span>`;
+  }
+}
+
+// ── Save ───────────────────────────────────────────────────
+async function saveAll() {
+  // Remap item category colors if any changed
+  for (const [oldColor, newColor] of Object.entries(colorRemaps)) {
+    await fetch('/api/items/remap-category', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ oldColor, newColor })
+    });
+  }
+  colorRemaps = {};
+
+  await Promise.all([
+    fetch('/api/types', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(types) }),
+    fetch('/api/categories', { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(cats) }),
+  ]);
+  dirty = false;
+  const msg = document.getElementById('savedMsg');
+  msg.classList.add('show');
+  setTimeout(() => msg.classList.remove('show'), 2500);
+}
+
+function showFlash(msg) {
+  const el = document.getElementById('flash');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function escAttr(s){return String(s).replace(/'/g,"\\'");}
+
+window.addEventListener('beforeunload', e => { if(dirty){e.preventDefault();e.returnValue='';}});
+applySettings();
+load();
+
+// Update favicon from shop logo
+function updateFavicon() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.shopLogo) {
+    const link = document.getElementById('favicon');
+    if (link) link.href = s.shopLogo;
+  }
+}
+updateFavicon();
+</script>
+<script>window.SHOP_APP_ID = "kanban";</script>
+</body>
+</html>

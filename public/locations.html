@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" href="/favicon.png"><link id="favicon" rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KANBAN · Locations</title>
+<link rel="stylesheet" href="/theme-tokens.css">
+<!-- Blocking on purpose: deferred, the page paints light then flips. -->
+<script src="/theme.js"></script>
+<script>
+/* The accent used to default to blue, and settings writes whatever the
+ * picker shows on every save — so browsers that never chose a colour
+ * still have that blue stored, where an inline style beats the sheet.
+ * Retiring exactly the old default lets the house rust through; any
+ * other value was a deliberate choice and is left alone. */
+try{var _t=JSON.parse(localStorage.getItem("kanban_settings")||"{}");
+if(_t.accentColor==="#1a4fa8"){delete _t.accentColor;
+localStorage.setItem("kanban_settings",JSON.stringify(_t));}}catch(e){}
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px}
+header{background:var(--surface);border-bottom:1px solid var(--line);color:var(--ink);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.logo{font-family:var(--mono);font-size:13px;letter-spacing:.08em;font-weight:500;display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none}
+.nav-link{color:var(--ink-soft);text-decoration:none;font-size:13px;padding:6px 12px;border-radius:var(--radius);transition:all .15s}
+.nav-link:hover{color:var(--ink);background:var(--surface2)}
+.main{max-width:640px;margin:0 auto;padding:32px 24px}
+.page-title{font-size:22px;font-weight:600;margin-bottom:6px}
+.page-sub{color:var(--muted);font-size:14px;margin-bottom:28px}
+.card{background:var(--surface);border:1px solid var(--border-light);border-radius:10px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:20px}
+.location-row{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border-light)}
+.location-row:last-child{border-bottom:none}
+.location-name{flex:1;font-family:var(--mono);font-size:13px;font-weight:500}
+.location-desc{flex:2;font-size:13px;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all .15s}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{opacity:.88}
+.btn-ghost{background:transparent;color:var(--muted);border-color:var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:var(--text)}
+.btn-danger{background:transparent;color:#a32b1c;border-color:transparent}
+.btn-danger:hover{background:#fbeae7}
+.btn-sm{padding:4px 10px;font-size:12px}
+.add-form{display:flex;gap:8px;padding:16px}
+.add-form input{flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:13px;background:var(--surface);color:var(--text);outline:none}
+.add-form input:focus{border-color:var(--accent)}
+.empty{text-align:center;padding:40px;color:var(--muted);font-size:14px}
+.flash{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(8px);background:#14120f;color:#fff;padding:10px 20px;border-radius:100px;font-size:13px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:999}
+.flash.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media (max-width: 640px) {
+  header { height: auto; min-height: 52px; flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; }
+  .logo { font-size: 11px; white-space: nowrap; }
+  .nav-link { font-size: 12px; }
+  .main { padding: 20px 14px; }
+  .location-row { flex-wrap: wrap; gap: 8px; }
+}
+
+
+:root[data-theme="dark"]{--surface2:#2b2721}
+</style>
+</head>
+<body>
+<header>
+  <a href="/" class="logo">
+    <span id="headerDot" style="width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--accent)"></span>
+    <span id="headerName">YOUR SHOP / LOCATIONS</span>
+  </a>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span id="theme-toggle"></span>
+    <a href="/settings.html" class="nav-link">← Settings</a>
+  </div>
+</header>
+
+<div class="main">
+  <div class="page-title">Cell / Locations</div>
+  <div class="page-sub">Define the cells and locations in your shop. These appear as a dropdown when adding or editing inventory items.</div>
+
+  <div class="card">
+    <div id="locationList"></div>
+    <div class="add-form">
+      <input type="text" id="newLocName" placeholder="e.g. A-01, Cabinet 3, Top Drawer..." onkeydown="if(event.key==='Enter')addLocation()">
+      <button class="btn btn-primary" onclick="addLocation()">+ Add</button>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;gap:8px">
+    <a href="/settings.html" class="btn btn-ghost">← Back to Settings</a>
+  </div>
+</div>
+
+<div class="flash" id="flash"></div>
+
+<script>
+let locations = [];
+let flashTimer;
+
+function applySettings() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.accentColor) document.documentElement.style.setProperty('--accent', s.accentColor);
+  const name = (s.shopName||'YOUR SHOP').toUpperCase();
+  document.getElementById('headerDot').style.background = s.accentColor||'#c4351c';
+  document.getElementById('headerName').textContent = name + ' / LOCATIONS';
+  const link = document.getElementById('favicon');
+  if (link && s.shopLogo) link.href = s.shopLogo;
+}
+
+async function load() {
+  const res = await fetch('/api/locations');
+  locations = await res.json();
+  render();
+}
+
+function render() {
+  const el = document.getElementById('locationList');
+  if (!locations.length) {
+    el.innerHTML = '<div class="empty">No locations yet — add your first cell or location below</div>';
+    return;
+  }
+  el.innerHTML = locations.map((loc, i) => `
+    <div class="location-row">
+      <div class="location-name">${esc(loc)}</div>
+      <div style="display:flex;gap:4px;flex-shrink:0">
+        <button class="btn btn-sm btn-ghost" onclick="moveUp(${i})" ${i===0?'disabled style="opacity:.3"':''}>↑</button>
+        <button class="btn btn-sm btn-ghost" onclick="moveDown(${i})" ${i===locations.length-1?'disabled style="opacity:.3"':''}>↓</button>
+        <button class="btn btn-sm btn-danger" onclick="removeLocation(${i})">✕</button>
+      </div>
+    </div>`).join('');
+}
+
+async function save() {
+  await fetch('/api/locations', {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(locations)
+  });
+}
+
+async function addLocation() {
+  const input = document.getElementById('newLocName');
+  const name = input.value.trim();
+  if (!name) return;
+  if (locations.includes(name)) { showFlash('Already exists'); return; }
+  locations.push(name);
+  await save();
+  input.value = '';
+  render();
+  showFlash('✓ Location added');
+}
+
+async function removeLocation(i) {
+  locations.splice(i, 1);
+  await save();
+  render();
+  showFlash('Removed');
+}
+
+async function moveUp(i) {
+  if (i === 0) return;
+  [locations[i-1], locations[i]] = [locations[i], locations[i-1]];
+  await save();
+  render();
+}
+
+async function moveDown(i) {
+  if (i === locations.length-1) return;
+  [locations[i], locations[i+1]] = [locations[i+1], locations[i]];
+  await save();
+  render();
+}
+
+function showFlash(msg) {
+  const el = document.getElementById('flash');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+applySettings();
+load();
+</script>
+<script>window.SHOP_APP_ID = "kanban";</script>
+</body>
+</html>

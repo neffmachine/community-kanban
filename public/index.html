@@ -1,325 +1,2875 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Community Kanban</title>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" href="/favicon.png"><link id="favicon" rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KANBAN · Inventory</title>
+<link rel="stylesheet" href="/theme-tokens.css">
+<!-- Blocking on purpose: deferred, the page paints light then flips. -->
+<script src="/theme.js"></script>
+<script>
+/* The accent used to default to blue, and settings writes whatever the
+ * picker shows on every save — so browsers that never chose a colour
+ * still have that blue stored, where an inline style beats the sheet.
+ * Retiring exactly the old default lets the house rust through; any
+ * other value was a deliberate choice and is left alone. */
+try{var _t=JSON.parse(localStorage.getItem("kanban_settings")||"{}");
+if(_t.accentColor==="#1a4fa8"){delete _t.accentColor;
+localStorage.setItem("kanban_settings",JSON.stringify(_t));}}catch(e){}
+</script>
 <style>
-  :root{--bg:#14140f;--surface:#1e1e18;--border:#33332a;--text:#f0efe8;--muted:#9a9a8c;--accent:#c2410c;
-        --mono:ui-monospace,SFMono-Regular,Menlo,monospace;color-scheme:dark}
-  *{box-sizing:border-box}
-  body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
-  header{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);
-         background:var(--surface);flex-wrap:wrap;position:sticky;top:0;z-index:5}
-  h1{font-size:16px;margin:0;letter-spacing:.02em;white-space:nowrap}
-  main{max-width:1200px;margin:0 auto;padding:20px}
-  button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:14px;cursor:pointer}
-  button.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
-  button.link{background:none;border:none;color:var(--muted);padding:4px 6px;font-size:13px;text-decoration:underline}
-  button:hover{filter:brightness(1.15)}
-  input,select,textarea{background:var(--bg);border:1px solid var(--border);color:var(--text);
-                        border-radius:6px;padding:8px 10px;font-size:14px;font-family:inherit}
-  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
-  table{width:100%;border-collapse:collapse;margin-top:16px}
-  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:middle}
-  th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-  tbody tr:hover{background:#ffffff08}
-  .thumb{width:34px;height:34px;border-radius:6px;object-fit:cover;background:#ffffff0d;display:block}
-  .thumb.ph{display:grid;place-items:center;font-size:15px;color:var(--muted)}
-  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;flex:none;
-       vertical-align:baseline;border:1px solid #0006}
-  .desc{display:flex;align-items:baseline;gap:0}
-  .tag{font-family:var(--mono);font-size:11px;background:#ffffff12;border:1px solid var(--border);
-       padding:2px 7px;border-radius:5px;white-space:nowrap}
-  .qty{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
-  .badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px;letter-spacing:.04em}
-  .badge.ok{background:#1f3d2b;color:#a6e6bd}
-  .badge.reorder{background:#5a2418;color:#ffb9a3}
-  .badge.ordered{background:#2c3a5c;color:#b3c9ff}
-  .pickup{background:#b26a00;color:#fff4e0;margin-left:6px}
-  .muted{color:var(--muted)}
-  .grow{flex:1;min-width:140px}
-  .card{max-width:340px;margin:12vh auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px}
-  .card h2{margin:0 0 4px;font-size:18px}.card p{color:var(--muted);font-size:13px;margin:0 0 18px}
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
-  .err{color:#f0806a;font-size:13px;min-height:18px}
-  .empty{color:var(--muted);padding:28px 8px;text-align:center}
-  dialog{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;
-         padding:0;max-width:680px;width:calc(100% - 32px)}
-  dialog::backdrop{background:#000a}
-  .dlg-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
-  .dlg-head h3{margin:0;font-size:15px}
-  .dlg-body{padding:20px;max-height:65vh;overflow:auto}
-  .dlg-foot{display:flex;justify-content:space-between;gap:8px;padding:14px 20px;border-top:1px solid var(--border)}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
-  .grid .full{grid-column:1/-1}
-  .cfg-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
-  .cfg-row input[type=color]{padding:2px;width:44px;height:36px}
-  h4{margin:20px 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
-  h4:first-child{margin-top:0}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:var(--font-size);line-height:1.5;transition:background .2s,color .2s}
+
+header{background:var(--surface);border-bottom:1px solid var(--line);color:var(--ink);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+:root[data-theme="dark"] header{background:var(--surface)}
+.logo{font-family:var(--mono);font-size:13px;letter-spacing:.08em;font-weight:500;display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink)}
+.logo-dot{width:8px;height:8px;border-radius:50%;display:inline-block;background:var(--accent)}
+.header-right{display:flex;gap:8px;align-items:center;margin-left:auto}
+/* Theme switch and app switcher: always reachable, never part of the
+ * scrolling action row. On a wide screen they simply trail the actions. */
+.header-util{display:flex;gap:8px;align-items:center;margin-left:8px}
+.header-left{display:flex;align-items:center;gap:14px;min-width:0}
+.hub-btn{display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--line-strong);color:var(--ink-soft);border-radius:var(--radius);padding:7px 12px;font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;text-decoration:none;transition:all .15s;white-space:nowrap}
+.hub-btn:hover{border-color:var(--rust);color:var(--ink)}
+.cart-btn{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--line-strong);color:var(--ink);border-radius:var(--radius);padding:7px 14px;font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;text-decoration:none;transition:background .15s}
+.cart-btn:hover{border-color:var(--rust)}
+.cart-count{background:var(--accent);color:var(--paper);border-radius:100px;font-size:11px;font-weight:700;padding:1px 7px;min-width:20px;text-align:center;font-family:var(--mono)}
+.cart-count.hidden{display:none}
+.icon-btn{background:var(--surface2);border:1px solid var(--line-strong);color:var(--ink-soft);border-radius:var(--radius);padding:7px 10px;cursor:pointer;display:flex;align-items:center;transition:all .15s;text-decoration:none}
+.icon-btn:hover{background:var(--surface2);color:var(--ink)}
+
+/* Scan mode button */
+.scan-btn{display:flex;align-items:center;gap:7px;background:var(--surface2);border:1px solid var(--line-strong);color:var(--ink-soft);border-radius:var(--radius);padding:7px 14px;font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s}
+.scan-btn:hover{border-color:var(--rust);color:var(--ink)}
+.scan-btn.active{background:var(--accent);border-color:var(--accent);color:var(--paper);animation:scan-pulse 2s ease-in-out infinite}
+@keyframes scan-pulse{0%,100%{box-shadow:0 0 0 0 rgba(26,79,168,.4)}50%{box-shadow:0 0 0 6px rgba(26,79,168,.0)}}
+
+/* Scan overlay banner */
+.scan-banner{display:none;position:fixed;top:56px;left:0;right:0;background:var(--accent);color:#fff;padding:10px 24px;z-index:90;font-size:13px;align-items:center;justify-content:space-between;gap:16px}
+.scan-banner.active{display:flex}
+.scan-banner-left{display:flex;align-items:center;gap:10px}
+.scan-dot{width:8px;height:8px;border-radius:50%;background:#fff;animation:blink 1s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+/* Camera scanner (mobile) — full-screen camera with a scanning reticle */
+.cam-scan{position:fixed;inset:0;z-index:400;background:#000;display:none;flex-direction:column}
+.cam-scan.open{display:flex}
+#camVideo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.cam-ui{position:relative;z-index:2;display:flex;flex-direction:column;height:100%;padding:16px;padding-top:calc(16px + env(safe-area-inset-top));pointer-events:none}
+.cam-top{display:flex;justify-content:space-between;align-items:center;gap:12px;pointer-events:auto}
+.cam-title{color:#fff;font-weight:600;font-size:15px;text-shadow:0 1px 4px rgba(0,0,0,.7)}
+.cam-close{pointer-events:auto;display:inline-flex;align-items:center;gap:6px;background:rgba(0,0,0,.6);border:1.5px solid rgba(255,255,255,.55);color:#fff;padding:10px 18px 10px 14px;border-radius:100px;font-size:15px;font-weight:600;font-family:var(--sans);cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.4)}
+.cam-close:active{background:rgba(0,0,0,.8)}
+.cam-close svg{width:18px;height:18px}
+.cam-reticle{width:min(66vw,260px);height:min(66vw,260px);margin:auto;border:3px solid rgba(255,255,255,.9);border-radius:20px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45);transition:border-color .2s}
+.cam-reticle.hit{border-color:#3ad07a;border-width:5px}
+.cam-status{align-self:center;text-align:center;color:#fff;font-size:14px;background:rgba(0,0,0,.55);padding:10px 18px;border-radius:100px;margin-bottom:6px;max-width:90%}
+.cam-status.err{color:#ffb4b4}
+
+/* Scan-result sheet: slides up over the camera when a card is decoded */
+.scan-sheet{position:absolute;left:0;right:0;bottom:0;z-index:5;transform:translateY(101%);transition:transform .25s ease;pointer-events:none}
+.scan-sheet.open{transform:translateY(0);pointer-events:auto}
+.ss-card{background:var(--surface);border-radius:16px 16px 0 0;padding:22px 20px calc(20px + env(safe-area-inset-bottom));box-shadow:0 -8px 30px rgba(0,0,0,.4)}
+.ss-sku{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:500}
+.ss-desc{font-size:18px;font-weight:600;margin:2px 0 16px;color:var(--text);line-height:1.3}
+.ss-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.ss-cell{background:var(--bg);border-radius:8px;padding:10px 12px}
+.ss-cell.wide{grid-column:span 2;text-align:center;background:var(--text);color:var(--paper)}
+.ss-lbl{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:3px;font-weight:600}
+.ss-cell.wide .ss-lbl{color:rgba(255,255,255,.55)}
+.ss-val{font-family:var(--mono);font-size:14px;font-weight:500}
+.ss-cell.wide .ss-val{font-size:20px}
+.ss-msg{text-align:center;padding:11px;border-radius:8px;font-size:14px;font-weight:600;margin-bottom:14px}
+.ss-msg.ok{background:#e6f0e7;color:#2f6f43}
+.ss-msg.info{background:#f6e7e3;color:#c4351c}
+.ss-btn{display:block;width:100%;padding:14px;border-radius:10px;font-size:15px;font-weight:600;border:none;cursor:pointer;font-family:var(--sans);text-align:center}
+.ss-primary{background:var(--accent);color:#fff;margin-bottom:10px}
+.ss-row{display:flex;gap:10px}
+.ss-ghost{flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text)}
+
+/* Flash toast */
+.flash{position:fixed;bottom:28px;left:50%;transform:translateX(-50%) translateY(8px);background:#14120f;color:#fff;padding:10px 20px;border-radius:100px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,.2);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:999;white-space:nowrap}
+.flash.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.flash.error{background:var(--reorder,#a32b1c)}
+.flash.success{background:#2f6f43}
+
+.main{max-width:1400px;margin:0 auto;padding:20px 24px}
+.main.scan-active{padding-top:56px}
+
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+.stat-card{background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);padding:12px 16px;box-shadow:var(--shadow)}
+.stat-label{font-size:10px;color:var(--muted);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin-bottom:3px}
+.stat-value{font-size:22px;font-weight:600;font-family:var(--mono)}
+.stat-value.cart-c{color:var(--accent)}
+
+.toolbar{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.search-wrap{position:relative;flex:1;min-width:220px;max-width:420px}
+.search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);opacity:.4;pointer-events:none}
+input[type=search],input[type=text],input[type=number],input[type=url],select,textarea{
+  width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius);
+  font-family:var(--sans);font-size:13px;background:var(--surface);color:var(--text);outline:none;transition:border-color .15s
+}
+input[type=search]{padding-left:34px}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+.filter-select{width:auto;padding:7px 30px 7px 10px;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b6860'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;cursor:pointer;color:var(--muted)}
+.filter-select:focus{color:var(--text)}
+
+/* Color-aware custom filter */
+.cs-wrap{position:relative;display:inline-flex;align-items:center}
+.cs-btn{display:flex;align-items:center;gap:7px;padding:7px 26px 7px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);color:var(--muted);font-family:var(--sans);font-size:13px;cursor:pointer;white-space:nowrap;user-select:none;transition:border-color .15s;position:relative}
+.cs-btn:hover{border-color:var(--border)}
+.cs-btn.active{color:var(--text);border-color:var(--border)}
+.cs-btn svg.cs-arrow{position:absolute;right:8px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.cs-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;display:none}
+.cs-dot.visible{display:block}
+.cs-panel{position:absolute;top:calc(100% + 4px);left:0;min-width:180px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;overflow:hidden;display:none;max-height:280px;overflow-y:auto}
+.cs-panel.open{display:block}
+.cs-option{display:flex;align-items:center;gap:9px;padding:7px 12px;cursor:pointer;font-size:13px;font-family:var(--sans);color:var(--text);transition:background .1s;white-space:nowrap}
+.cs-option:hover{background:var(--bg)}
+.cs-option.selected{background:var(--bg);font-weight:600}
+.cs-option .cs-opt-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+
+.table-wrap{background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);box-shadow:var(--shadow);overflow-x:auto;overflow-y:hidden}
+table{width:100%;border-collapse:collapse;font-size:13px}
+thead th{background:var(--bg);padding:9px 14px;text-align:left;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--border-light);white-space:nowrap;cursor:pointer;user-select:none;transition:color .15s}
+thead th:hover{color:var(--text)}
+thead th.sorted{color:var(--accent)}
+.th-inner{display:flex;align-items:center;gap:24px}
+.sort-ind{font-size:9px;opacity:.4}
+thead th.sorted .sort-ind{opacity:1}
+tbody tr{border-bottom:1px solid var(--border-light);transition:background .1s;cursor:pointer}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:var(--bg)} tbody tr:hover td:last-child{background:var(--bg)}
+tbody tr.row-selected{background:var(--cart-bg)!important} tbody tr.row-selected td:last-child{background:var(--cart-bg)!important}
+/* Bulk-edit bar controls */
+.bulk-row2{display:flex;align-items:flex-end;gap:14px 16px;flex-wrap:wrap;padding-top:8px;border-top:1px solid rgba(255,255,255,.22)}
+.bulk-field{display:flex;flex-direction:column;gap:3px}
+.bulk-field>label{font-size:9px;text-transform:uppercase;letter-spacing:.05em;opacity:.72;font-weight:700}
+.bulk-ctrl{padding:5px 8px;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:5px;font-size:12px;font-family:var(--sans);outline:none;height:28px;box-sizing:border-box}
+.bulk-ctrl:focus{border-color:#fff;background:rgba(255,255,255,.25)}
+.bulk-ctrl::placeholder{color:rgba(255,255,255,.6)}
+.bulk-ctrl option{color:#1a1916}
+select.bulk-ctrl{cursor:pointer;appearance:none;padding-right:22px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='white'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center}
+.bulk-num{width:62px}
+.bulk-inp{width:140px}
+.bulk-hint{font-size:10px;opacity:.6;align-self:center}
+tbody tr.just-scanned{background:#e6f0e7;transition:background 1s}
+tbody td{padding:11px 14px;vertical-align:middle}
+.sku{font-family:var(--mono);font-size:11px;font-weight:500}
+.desc{max-width:300px;font-size:13px}
+.thumb{width:28px;height:28px;object-fit:contain;border-radius:3px;border:1px solid var(--border-light);flex-shrink:0;background:#fff}
+.thumb-ph{width:28px;height:28px;border-radius:4px;flex-shrink:0;background:var(--bg);border:1px solid var(--border-light);display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.thumb-ph svg{width:16px;height:16px}
+.supplier-cell{color:var(--muted);font-size:12px;white-space:nowrap}
+.type-badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;background:var(--border-light);color:var(--muted);white-space:nowrap;text-transform:capitalize}
+/* Physical-run (local pickup) restock flag — amber, reads on light or dark rows */
+.pickup-badge{display:inline-flex;align-items:center;gap:3px;font-size:9px;font-weight:700;letter-spacing:.04em;padding:2px 7px;border-radius:100px;background:#b26a00;color:#fff4e0;border:1px solid #d98a20;white-space:nowrap;flex-shrink:0;text-transform:uppercase}
+.color-col{padding:0!important;width:28px!important;min-width:28px;text-align:center}
+.bin-tag{font-family:var(--mono);font-size:11px;padding:2px 8px;background:var(--border-light);border-radius:4px;color:var(--muted)}
+.url-link{color:var(--accent);font-size:11px;text-decoration:none;font-family:var(--mono);white-space:nowrap}
+.resizer{position:absolute;right:0;top:0;height:100%;width:5px;cursor:col-resize;user-select:none;z-index:1}
+.resizer:hover,.resizer.resizing{background:var(--accent);opacity:.5}
+th{position:relative}
+table{table-layout:auto;min-width:900px}
+.url-link:hover{text-decoration:underline}
+.no-url{color:var(--border);font-size:11px}
+.row-actions{display:flex;gap:5px;opacity:0;transition:opacity .15s;white-space:nowrap;flex-wrap:nowrap}
+tbody tr:hover .row-actions{opacity:1}
+
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all .15s;text-decoration:none;white-space:nowrap}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{opacity:.88}
+.btn-ghost{background:transparent;color:var(--muted);border-color:var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:var(--text);background:var(--bg)}
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:4px}
+.btn-danger{color:#a32b1c;border-color:transparent;background:transparent}
+.btn-danger:hover{background:#fbeae7}
+.btn-cart{color:var(--accent);border-color:transparent;background:transparent}
+.btn-cart:hover{background:var(--cart-bg)}
+.btn-cart.in-cart{color:#2f6f43}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(10,10,8,.55);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:all}
+.modal{background:var(--surface);border-radius:10px;width:100%;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.25);transform:translateY(8px);transition:transform .2s;max-height:90vh;overflow-y:auto}
+.modal-overlay.open .modal{transform:translateY(0)}
+.modal-header{padding:20px 24px 0;display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.modal-title{font-size:16px;font-weight:600}
+.modal-body{padding:0 24px 24px}
+.modal-footer{padding:14px 24px;border-top:1px solid var(--border-light);display:flex;justify-content:flex-end;gap:8px}
+.form-row{margin-bottom:14px}
+.form-label{display:block;font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px}
+.form-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.form-hint{font-size:11px;color:var(--muted);margin-top:4px}
+
+.photo-upload{border:1.5px dashed var(--border);border-radius:var(--radius);padding:16px;text-align:center;cursor:pointer;transition:border-color .15s;position:relative}
+.photo-upload:hover{border-color:var(--accent)}
+.photo-upload input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%}
+.photo-preview{width:100%;max-height:140px;object-fit:contain;border-radius:4px;margin-top:8px;display:none}
+
+.label-preview-area{background:var(--bg);border-radius:var(--radius);padding:20px;display:flex;justify-content:center;margin-bottom:14px;min-height:150px;align-items:center}
+.size-selector{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.size-opt{border:1px solid var(--border);border-radius:var(--radius);padding:7px 5px;text-align:center;cursor:pointer;background:var(--surface);transition:all .15s}
+.size-opt:hover{border-color:var(--accent)}
+.size-opt.active{border-color:var(--accent);background:var(--cart-bg)}
+.size-opt .size-name{font-size:11px;font-weight:600;display:block}
+.size-opt .size-dim{font-size:10px;color:var(--muted);display:block;font-family:var(--mono)}
+
+.empty{text-align:center;padding:60px 24px;color:var(--muted)}
+.empty-icon{font-size:32px;margin-bottom:10px;opacity:.35}
+.empty h3{font-size:15px;font-weight:500;margin-bottom:5px;color:var(--text)}
+.table-footer{margin-top:10px;font-size:12px;color:var(--muted);text-align:right}
+
+/* Tablet: keep the horizontal table but drop the two least-critical columns */
+@media(max-width:1000px){
+  .stats-bar{grid-template-columns:repeat(2,1fr)}
+  thead th:nth-child(4),tbody td:nth-child(4),
+  thead th:nth-child(5),tbody td:nth-child(5){display:none}
+}
+
+/* Phone: header collapses to icons, each inventory row becomes a stacked card */
+@media(max-width:640px){
+  /* Header → two rows.
+   *
+   * This used to collapse to icons only, which fits but reads as a row of
+   * identical grey squares: nothing says which one is Receiving and which
+   * is the queue, and the brand disappeared entirely, leaving a lone dot.
+   * Giving the actions their own full-width row buys enough space to put
+   * the words back. If they still overflow — longer labels, a bigger
+   * font — the row scrolls sideways on its own rather than clipping.
+   */
+  header{padding:8px 12px;gap:8px;height:auto;flex-wrap:wrap}
+  .header-left{gap:8px;flex:1 1 auto;min-width:0}
+  .logo-ver{display:none}
+  #logoText{font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  /* Row one: brand on the left, utilities on the right. */
+  .header-util{order:2;margin-left:0}
+
+  .header-right{
+    order:3; width:100%; gap:6px;
+    overflow-x:auto; -webkit-overflow-scrolling:touch;
+    scrollbar-width:none; padding-bottom:2px;
+  }
+  .header-right::-webkit-scrollbar{display:none}
+  .header-right > *{flex:0 0 auto}
+  /* Sized to sit alongside the filter row below rather than tower over
+   * it — these were running a couple of points larger than every other
+   * control on the page, which made the header look like a different app. */
+  .btn-label{font-size:12px}
+  .cart-btn,.scan-btn,.hub-btn{padding:7px 10px;font-size:12px}
+  .cart-btn .cart-count{margin-left:2px;font-size:11px}
+  .header-right .btn.btn-sm{padding:7px 11px;font-size:12px;line-height:1}
+  /* Icons carried the whole meaning at this size and were too faint for it. */
+  .icon-btn{padding:7px 8px;color:var(--ink)}
+  .icon-btn svg,.cart-btn svg,.scan-btn svg{width:15px;height:15px}
+  /* The utilities hold their size; the brand gives way instead. */
+  .header-util{flex:0 0 auto}
+  .header-util > *{flex:0 0 auto}
+
+  .main{padding:14px 12px}
+  .stat-card{padding:10px 12px}
+  .stat-value{font-size:18px}
+  .toolbar{gap:8px}
+  .search-wrap{max-width:none}
+
+  /* table → cards: reveal every column (undo the tablet hide) as labeled rows.
+   * `revert` would put these two back to table-cell, and because
+   * :nth-child outranks td[data-label] they would keep it — which is why
+   * Part # and Vendor used to print their label hard against the value
+   * while every other row spaced out. Name the layout they actually want. */
+  thead th:nth-child(4),tbody td:nth-child(4),
+  thead th:nth-child(5),tbody td:nth-child(5){display:flex}
+  .table-wrap{overflow:visible;background:transparent;border:none;box-shadow:none}
+  table{min-width:0;width:100%;table-layout:auto}
+  thead{display:none}
+  tbody{display:block}
+  tbody tr{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:0 10px;
+    background:var(--surface);border:1px solid var(--border-light);border-radius:9px;
+    box-shadow:var(--shadow);padding:12px 14px;margin-bottom:10px}
+  tbody tr:hover{background:var(--surface)}
+  tbody td{display:block;padding:0;border:none;white-space:normal}
+
+  /* top of card: color dot + item name */
+  td.m-color{width:auto!important;padding:0!important}
+  td.m-color div{width:12px!important;height:12px!important;margin:0!important}
+  td.m-check{display:none}                      /* bulk-select is a desktop op */
+  td.m-title{grid-column:2;min-width:0}
+  td.m-title .desc{max-width:none;font-weight:600;font-size:15px;line-height:1.35}
+  td.m-title .thumb,td.m-title .thumb-ph{width:34px;height:34px}
+
+  /* the data fields: full-width "LABEL … value" rows */
+  td[data-label]{grid-column:1 / -1;display:flex;justify-content:space-between;align-items:center;
+    gap:12px;padding:7px 0;border-top:1px solid var(--border-light);min-height:20px}
+  td[data-label]::before{content:attr(data-label);font-size:11px;font-weight:600;
+    text-transform:uppercase;letter-spacing:.04em;color:var(--muted);white-space:nowrap}
+  td[data-label] .url-link{max-width:60vw!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* actions: full-width row, always visible (no hover on touch) */
+  td.m-actions{grid-column:1 / -1;position:static!important;width:auto!important;min-width:0!important;
+    box-shadow:none!important;background:transparent!important;padding:10px 0 0!important;
+    margin-top:8px;border-top:1px solid var(--border-light)}
+  td.m-actions .row-actions{opacity:1!important;gap:8px}
+  td.m-actions .row-actions .btn{flex:1;justify-content:center;padding:10px 8px}
+}
+@media print{
+  #printArea{display:block!important}
+  .no-print, .flash{display:none!important}
+  body{background:#fff}
+  /* Force color printing on everything in the print area */
+  #printArea, #printArea *{
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+  /* QL-800 DK-2205: 62mm wide continuous tape */
+  .label-sm-print{
+    width:44.45mm !important;
+    height:19mm !important;
+  }
+  /* Force black-only on sm labels — no grays or colors */
+  .label-sm-print *{
+    color:#000 !important;
+    border-color:#000 !important;
+    background:#fff !important;
+  }
+  /* Label pages: one per page, no margin */
+  .label-page{
+    page-break-after: always;
+    display: flex !important;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 0;
+    margin: 0;
+  }
+  .label-page:last-child{ page-break-after: auto; }
+}
 </style>
 </head>
 <body>
-<div id="app"></div>
 
-<script type="module">
-import { filterItems, distinctValues } from './filters.mjs';
-
-const $ = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstChild; };
-const api = (path, opts) => fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
-const getJSON = async (path) => (await api(path)).json();
-const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const render = (el) => { const a = document.getElementById('app'); a.innerHTML = ''; a.append(el); };
-
-// Everything the page needs, refetched whenever a change lands.
-const state = { shop: '', items: [], cells: {}, types: {}, locations: [], query: '', category: '', supplier: '' };
-
-async function boot() {
-  const me = await api('/api/me');
-  if (!me.ok) return showLogin();
-  state.shop = (await me.json()).shop;
-  await loadAll();
-  showApp();
-}
-
-async function loadAll() {
-  const [items, cells, types, locations] = await Promise.all([
-    getJSON('/api/items'), getJSON('/api/categories'), getJSON('/api/types'), getJSON('/api/locations'),
-  ]);
-  Object.assign(state, { items, cells, types, locations });
-}
-
-function showLogin(msg = '') {
-  const el = $(`<div class="card">
-    <h2>Community Kanban</h2><p>Enter the shop password.</p>
-    <div class="row"><input id="pw" type="password" placeholder="Shop password" class="grow"><button id="go">Sign in</button></div>
-    <div class="err" id="err">${esc(msg)}</div>
-  </div>`);
-  const submit = async () => {
-    const r = await api('/api/login', { method: 'POST', body: JSON.stringify({ password: el.querySelector('#pw').value }) });
-    if (r.ok) boot(); else showLogin('Wrong password — try again.');
-  };
-  el.querySelector('#go').onclick = submit;
-  el.querySelector('#pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-  render(el);
-  el.querySelector('#pw').focus();
-}
-
-function showApp() {
-  const el = $(`<div>
-    <header>
-      <h1>${esc(state.shop)} · Kanban</h1>
-      <input id="q" placeholder="Search items…" class="grow" value="${esc(state.query)}">
-      <select id="fc"></select>
-      <select id="fv"></select>
-      <button id="new">+ Item</button>
-      <button class="ghost" id="cfg">Settings</button>
-      <button class="ghost" id="out">Sign out</button>
-    </header>
-    <main>
-      <div id="count" class="muted" style="font-size:12px"></div>
-      <table>
-        <thead><tr>
-          <th style="width:44px"></th><th>Description</th><th>Part #</th><th>Vendor</th>
-          <th>Location</th><th>Min / Reorder</th><th>Status</th><th style="width:120px"></th>
-        </tr></thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </main>
-  </div>`);
-
-  const q = el.querySelector('#q'), fc = el.querySelector('#fc'), fv = el.querySelector('#fv');
-  const fillFilters = () => {
-    fc.innerHTML = '<option value="">All cells</option>' + Object.entries(state.cells)
-      .map(([color, c]) => `<option value="${esc(color)}"${state.category === color ? ' selected' : ''}>${esc(c.label || color)}</option>`).join('');
-    fv.innerHTML = '<option value="">All vendors</option>' + distinctValues(state.items, 'supplier')
-      .map((v) => `<option value="${esc(v)}"${state.supplier === v ? ' selected' : ''}>${esc(v)}</option>`).join('');
-  };
-
-  const paint = () => {
-    const list = filterItems(state.items, { query: state.query, category: state.category, supplier: state.supplier });
-    const rows = el.querySelector('#rows');
-    rows.innerHTML = '';
-    el.querySelector('#count').textContent =
-      `${list.length} of ${state.items.length} item${state.items.length === 1 ? '' : 's'}`;
-
-    if (!state.items.length) {
-      rows.append($(`<tr><td colspan="8" class="empty">No items yet — add your first with <b>+ Item</b>.</td></tr>`));
-      return;
-    }
-    if (!list.length) {
-      rows.append($(`<tr><td colspan="8" class="empty">Nothing matches that search or filter.</td></tr>`));
-      return;
-    }
-    for (const it of list) rows.append(itemRow(it));
-  };
-
-  const itemRow = (it) => {
-    const cell = state.cells[it.category];
-    const status = ['ok', 'reorder', 'ordered'].includes(it.status) ? it.status : 'ok';
-    const units = [
-      `${it.minStock ?? ''}${it.minUnit ? ' ' + esc(it.minUnit) : ''}`,
-      `${it.reorderQty ?? ''}${it.reorderUnit ? ' ' + esc(it.reorderUnit) : ''}`,
-    ].join(' / ');
-    const tr = $(`<tr>
-      <td>${it.photo
-        ? `<img class="thumb" src="${esc(it.photo)}" alt="">`
-        : '<div class="thumb ph">□</div>'}</td>
-      <td><span class="desc"><span class="dot" style="background:${esc(it.category || '#6b7280')}" title="${esc(cell ? cell.label : 'Uncategorised')}"></span>
-        <span>${esc(it.description)}${it.itemType ? ` <span class="muted">· ${esc(it.itemType)}</span>` : ''}
-        ${it.physicalReorder ? '<span class="badge pickup">PICKUP</span>' : ''}</span></span></td>
-      <td class="qty">${esc(it.sku || '—')}</td>
-      <td>${esc(it.supplier || '—')}</td>
-      <td>${it.bin ? `<span class="tag">${esc(it.bin)}</span>` : '<span class="muted">—</span>'}</td>
-      <td class="qty">${units}</td>
-      <td><span class="badge ${status}">${status.toUpperCase()}</span></td>
-      <td style="text-align:right;white-space:nowrap">
-        <button class="link" data-edit>Edit</button><button class="link" data-del>Delete</button></td>
-    </tr>`);
-    tr.querySelector('[data-edit]').onclick = () => itemDialog(it);
-    tr.querySelector('[data-del]').onclick = async () => {
-      if (!confirm(`Delete "${it.description}"?`)) return;
-      await api('/api/items/' + it.id, { method: 'DELETE' });
-      await refresh();
-    };
-    return tr;
-  };
-
-  q.addEventListener('input', () => { state.query = q.value; paint(); });
-  fc.addEventListener('change', () => { state.category = fc.value; paint(); });
-  fv.addEventListener('change', () => { state.supplier = fv.value; paint(); });
-  el.querySelector('#new').onclick = () => itemDialog(null);
-  el.querySelector('#cfg').onclick = () => settingsDialog();
-  el.querySelector('#out').onclick = async () => { await api('/api/logout', { method: 'POST' }); showLogin(); };
-
-  render(el);
-  fillFilters();
-  paint();
-}
-
-// Reload data and repaint, keeping the current search and filters.
-async function refresh() {
-  await loadAll();
-  showApp();
-}
-
-function openDialog(title, bodyHTML, footHTML) {
-  const dlg = $(`<dialog>
-    <form method="dialog" class="dlg-head"><h3>${esc(title)}</h3><button class="ghost" value="cancel">Close</button></form>
-    <div class="dlg-body">${bodyHTML}</div>
-    <div class="dlg-foot">${footHTML}</div>
-  </dialog>`);
-  document.body.append(dlg);
-  dlg.addEventListener('close', () => dlg.remove());
-  dlg.showModal();
-  return dlg;
-}
-
-function itemDialog(item) {
-  const it = item || {};
-  const cellOptions = Object.entries(state.cells)
-    .map(([color, c]) => `<option value="${esc(color)}"${it.category === color ? ' selected' : ''}>${esc(c.label || color)}</option>`).join('');
-  const dlg = openDialog(item ? 'Edit item' : 'New item', `
-    <div class="grid">
-      <div class="full"><label>Description</label><input id="f-description" value="${esc(it.description)}" style="width:100%"></div>
-      <div><label>Part # / SKU</label><input id="f-sku" value="${esc(it.sku)}" style="width:100%"></div>
-      <div><label>Vendor</label><input id="f-supplier" list="dl-vendors" value="${esc(it.supplier)}" style="width:100%"></div>
-      <div><label>Item type</label><input id="f-itemType" list="dl-types" value="${esc(it.itemType)}" style="width:100%"></div>
-      <div><label>Cell</label><select id="f-category" style="width:100%">${cellOptions}</select></div>
-      <div><label>Location</label><input id="f-bin" list="dl-locations" value="${esc(it.bin)}" style="width:100%"></div>
-      <div><label>Price</label><input id="f-price" type="number" step="0.01" value="${esc(it.price ?? 0)}" style="width:100%"></div>
-      <div><label>Min stock</label><input id="f-minStock" type="number" value="${esc(it.minStock ?? 1)}" style="width:100%"></div>
-      <div><label>Min unit</label><input id="f-minUnit" placeholder="ea, ft, box" value="${esc(it.minUnit)}" style="width:100%"></div>
-      <div><label>Reorder qty</label><input id="f-reorderQty" type="number" value="${esc(it.reorderQty ?? 1)}" style="width:100%"></div>
-      <div><label>Reorder unit</label><input id="f-reorderUnit" placeholder="box of 10" value="${esc(it.reorderUnit)}" style="width:100%"></div>
-      <div class="full"><label>Product URL</label><input id="f-url" value="${esc(it.url)}" style="width:100%"></div>
-      <div class="full"><label>Photo URL</label><input id="f-photo" value="${esc(it.photo)}" style="width:100%"></div>
-      <div class="full"><label><input type="checkbox" id="f-physicalReorder"${it.physicalReorder ? ' checked' : ''}> Pickup — restocked by a physical run, not an online order</label></div>
+<div id="devBanner" style="display:none;background:#b45309;color:#fff;text-align:center;padding:6px;font-size:12px;font-family:monospace;font-weight:600;letter-spacing:.05em;position:sticky;top:0;z-index:999">
+  ⚠ DEV BUILD — Changes here are for testing only and do not affect production
+</div>
+<header class="no-print">
+  <div class="header-left">
+    <a href="/" class="logo">
+      <span class="logo-dot" id="logoDot"></span>
+      <span id="logoText">YOUR SHOP / INVENTORY</span><span class="logo-ver" style="font-size:10px;opacity:.4;margin-left:8px;font-weight:400">v174</span>
+    </a>
+  </div>
+  <div class="header-right">
+    <button class="scan-btn" id="scanBtn" onclick="toggleScanMode()" title="Scan into Cart">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><rect x="7" y="7" width="10" height="10" rx="1"/></svg>
+      <span class="btn-label">Scan into Cart</span>
+    </button>
+    <a href="/receiving" class="cart-btn" id="receivingBtn" title="Receiving">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+      <span class="btn-label">Receiving</span>
+      <span class="cart-count hidden" id="receivingCount">0</span>
+    </a>
+    <a href="/cart" class="cart-btn" title="Order Queue">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+      <span class="btn-label">Order Queue</span>
+      <span class="cart-count hidden" id="cartCount">0</span>
+    </a>
+    <button class="btn btn-sm" style="background:var(--accent);color:#fff;border:none;font-weight:600" onclick="openAdd()" title="Add Item"><span aria-hidden="true">+</span><span class="btn-label"> Add Item</span></button>
+    <a href="/log" class="icon-btn" title="Activity Log">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+    </a>
+    <a href="/settings.html" class="icon-btn" title="Settings">
+      <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </a>
     </div>
-    <datalist id="dl-vendors">${distinctValues(state.items, 'supplier').map((v) => `<option value="${esc(v)}">`).join('')}</datalist>
-    <datalist id="dl-types">${Object.keys(state.types).map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
-    <datalist id="dl-locations">${state.locations.map((l) => `<option value="${esc(l)}">`).join('')}</datalist>
-    <div class="err" id="f-err"></div>
-  `, `<span></span><button id="save">${item ? 'Save changes' : 'Add item'}</button>`);
+  <div class="header-util"><span id="theme-toggle"></span></div>
+</header>
 
-  const val = (k) => dlg.querySelector('#f-' + k).value;
-  dlg.querySelector('#save').onclick = async () => {
-    const body = {
-      description: val('description'), sku: val('sku'), supplier: val('supplier'),
-      itemType: val('itemType'), category: val('category'), bin: val('bin'),
-      price: val('price'), minStock: val('minStock'), minUnit: val('minUnit'),
-      reorderQty: val('reorderQty'), reorderUnit: val('reorderUnit'),
-      url: val('url'), photo: val('photo') || null,
-      physicalReorder: dlg.querySelector('#f-physicalReorder').checked,
+<!-- Scan mode banner -->
+<div class="scan-banner no-print" id="scanBanner">
+  <div class="scan-banner-left">
+    <div class="scan-dot"></div>
+    <strong>Scan mode active</strong>
+    <span style="opacity:.8">— point scanner at any kanban card QR code</span>
+  </div>
+  <button onclick="toggleScanMode()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:5px 12px;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans)">Done scanning</button>
+</div>
+
+<!-- Camera scanner overlay (mobile) -->
+<div class="cam-scan no-print" id="camScan">
+  <video id="camVideo" playsinline muted autoplay></video>
+  <div class="cam-ui">
+    <div class="cam-top">
+      <button class="cam-close" onclick="stopCameraScan()" aria-label="Close camera and go back">
+        <svg fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        Back
+      </button>
+      <span class="cam-title">Scan kanban cards</span>
+    </div>
+    <div class="cam-reticle" id="camReticle"></div>
+    <div class="cam-status" id="camStatus">Point at a card's QR code</div>
+  </div>
+  <!-- Slides up when a card is decoded: shows the item + Add-to-queue, like the reorder page -->
+  <div class="scan-sheet" id="scanSheet">
+    <div class="ss-card">
+      <div class="ss-sku" id="ssSku"></div>
+      <div class="ss-desc" id="ssDesc"></div>
+      <div class="ss-grid">
+        <div class="ss-cell"><span class="ss-lbl">Vendor</span><span class="ss-val" id="ssVendor"></span></div>
+        <div class="ss-cell"><span class="ss-lbl">Location</span><span class="ss-val" id="ssBin"></span></div>
+        <div class="ss-cell wide"><span class="ss-lbl">Reorder Quantity</span><span class="ss-val" id="ssQty"></span></div>
+      </div>
+      <div class="ss-msg" id="ssMsg" style="display:none"></div>
+      <button class="ss-btn ss-primary" id="ssAddBtn" onclick="addScannedToCart()">Add to Order Queue</button>
+      <div class="ss-row">
+        <button class="ss-btn ss-ghost" onclick="scanAnother()">Scan another</button>
+        <button class="ss-btn ss-ghost" onclick="stopCameraScan()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="main no-print" id="mainContent">
+  <div class="stats-bar">
+    <div class="stat-card"><div class="stat-label">Total Items</div><div class="stat-value" id="statTotal">—</div></div>
+    <div class="stat-card"><div class="stat-label">In Queue</div><div class="stat-value cart-c" id="statCart">—</div></div>
+    <div class="stat-card"><div class="stat-label">Types</div><div class="stat-value" id="statTypes">—</div></div>
+    <div class="stat-card"><div class="stat-label">Vendors</div><div class="stat-value" id="statVendors">—</div></div>
+  </div>
+
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="search" id="searchInput" placeholder="Search description, SKU, vendor, type..." oninput="renderItems()">
+    </div>
+    <!-- Category multi-checkbox filter -->
+    <div class="cs-wrap" id="csWrapCategory">
+      <button type="button" class="cs-btn" id="csBtnCategory" onclick="toggleCs('category')">
+        <span class="cs-dot" id="csDotCategory"></span>
+        <span id="csLabelCategory">All categories</span>
+        <svg class="cs-arrow" width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="currentColor"/></svg>
+      </button>
+      <div class="cs-panel" id="csPanelCategory"></div>
+    </div>
+    <!-- Tools / Other quick toggle -->
+    <div style="display:flex;gap:24px">
+      <button id="btnViewTools" onclick="setViewMode('tools')" style="padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:var(--sans);font-weight:500;cursor:pointer;background:var(--surface);color:var(--muted);transition:all .15s">🔧 Tools</button>
+      <button id="btnViewOther" onclick="setViewMode('other')" style="padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:var(--sans);font-weight:500;cursor:pointer;background:var(--surface);color:var(--muted);transition:all .15s">📦 Other</button>
+      <button id="btnViewAll" onclick="setViewMode('all')" style="padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:var(--sans);font-weight:500;cursor:pointer;background:var(--accent);color:var(--paper);transition:all .15s">All</button>
+    </div>
+    <!-- Type color-select -->
+    <div class="cs-wrap" id="csWrapType" style="display:none">
+      <button type="button" class="cs-btn" id="csBtnType" onclick="toggleCs('type')">
+        <span class="cs-dot" id="csDotType"></span>
+        <span id="csLabelType">All types</span>
+        <svg class="cs-arrow" width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="currentColor"/></svg>
+      </button>
+      <div class="cs-panel" id="csPanelType"></div>
+    </div>
+    <!-- Vendor plain select (no color needed) -->
+    <select class="filter-select" id="vendorFilter" onchange="renderItems()"><option value="">All vendors</option></select>
+    <!-- Hidden inputs to carry values -->
+    <input type="hidden" id="categoryFilter" value="">
+    <input type="hidden" id="typeFilter" value="">
+    <!-- Print all visible -->
+    <div style="display:flex;align-items:center;gap:6px;margin-left:4px">
+      <select id="printAllSize" class="filter-select" style="padding:7px 24px 7px 8px">
+        <option value="xs">Bin Label</option>
+        <option value="sm">Tool Card</option>
+        <option value="md">3×1.5</option>
+        <option value="lg" selected>4×3</option>
+        <option value="full">3×5</option>
+      </select>
+      <input type="number" id="printCopies" value="1" min="1" max="10" style="width:46px;padding:7px 6px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);text-align:center" title="Copies per card">
+      <button onclick="printAllVisible()" style="padding:7px 12px;background:var(--text);color:var(--paper);border:none;border-radius:var(--radius);font-size:12px;font-family:var(--sans);font-weight:500;cursor:pointer;white-space:nowrap">🖨 Print visible</button>
+    </div>
+  </div>
+
+  <!-- Bulk toolbar — appears when items are checked -->
+  <div id="bulkBar" style="display:none;background:var(--accent);color:#fff;border-radius:var(--radius);padding:10px 16px;margin-bottom:12px;flex-direction:column;gap:8px">
+    <!-- Row 1: count + print buttons -->
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:10px;font-size:13px;font-weight:500;flex-shrink:0">
+        <span id="bulkCount">0 selected</span>
+        <button onclick="clearSelection()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:3px 10px;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans)">Clear</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+        <span style="font-size:11px;opacity:.7">🖨 Print selected:</span>
+        <button onclick="bulkPrint('sm')" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;padding:5px 11px;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans);font-weight:600" title="1.75×0.75 inch label">1.75×¾"</button>
+        <button onclick="bulkPrint('md')" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;padding:5px 11px;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans);font-weight:600" title="3×2 inch label">3×2"</button>
+        <button onclick="bulkPrint('lg')" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;padding:5px 11px;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans);font-weight:600" title="4×3 inch label">4×3"</button>
+        <button onclick="bulkPrint('full')" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;padding:5px 11px;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans);font-weight:600" title="3×5 inch index card">3×5"</button>
+        <button onclick="bulkPrint('ship')" style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);color:#fff;padding:5px 11px;border-radius:4px;cursor:pointer;font-size:12px;font-family:var(--sans);font-weight:600" title="4×6 inch shipping label — black &amp; white">4×6"</button>
+      </div>
+    </div>
+    <!-- Row 2: bulk edit -->
+    <div class="bulk-row2">
+      <div class="bulk-field">
+        <label>Cell</label>
+        <select id="bulkCategorySelect" class="bulk-ctrl" onchange="bulkCell(this)">
+          <option value="">— cell —</option>
+        </select>
+      </div>
+      <div class="bulk-field">
+        <label>Type</label>
+        <select id="bulkTypeSelect" class="bulk-ctrl" onchange="bulkType(this)">
+          <option value="">— type —</option>
+        </select>
+      </div>
+      <div class="bulk-field">
+        <label>Vendor</label>
+        <input id="bulkVendorInput" class="bulk-ctrl bulk-inp" list="bulkVendorList" placeholder="type or pick…" onchange="bulkVendor(this)">
+        <datalist id="bulkVendorList"></datalist>
+      </div>
+      <div class="bulk-field">
+        <label>Location</label>
+        <input id="bulkLocInput" class="bulk-ctrl bulk-inp" list="bulkLocList" placeholder="type or pick…" onchange="bulkLocation(this)">
+        <datalist id="bulkLocList"></datalist>
+      </div>
+      <div class="bulk-field">
+        <label>Min stock</label>
+        <input id="bulkMinStock" class="bulk-ctrl bulk-num" type="number" min="0" placeholder="#" onchange="bulkNum(this,'minStock')">
+      </div>
+      <div class="bulk-field">
+        <label>Reorder qty</label>
+        <input id="bulkReorderQty" class="bulk-ctrl bulk-num" type="number" min="0" placeholder="#" onchange="bulkNum(this,'reorderQty')">
+      </div>
+      <div class="bulk-field">
+        <label>Unit price</label>
+        <input id="bulkPrice" class="bulk-ctrl bulk-num" type="number" min="0" step="0.01" placeholder="$" onchange="bulkNum(this,'price')">
+      </div>
+      <span class="bulk-hint">each change applies to the selected rows</span>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:28px;padding:0" class="color-col"></th>
+          <th style="width:36px;padding:9px 8px 9px 10px" onclick="toggleSelectAll(event)">
+            <input type="checkbox" id="selectAll" onclick="toggleSelectAll(event)" style="cursor:pointer;accent-color:var(--accent);width:14px;height:14px">
+          </th>
+          <th onclick="sortBy('description')" id="th-description"><div class="th-inner">Description<span class="sort-ind">↕</span></div><div class="resizer" onmousedown="startResize(event,'th-description')"></div></th>
+          <th onclick="sortBy('sku')" id="th-sku"><div class="th-inner">Part # / SKU<span class="sort-ind">↕</span></div><div class="resizer" onmousedown="startResize(event,'th-sku')"></div></th>
+          <th onclick="sortBy('supplier')" id="th-supplier"><div class="th-inner">Vendor<span class="sort-ind">↕</span></div><div class="resizer" onmousedown="startResize(event,'th-supplier')"></div></th>
+
+          <th onclick="sortBy('bin')" id="th-bin"><div class="th-inner">Location<span class="sort-ind">↕</span></div><div class="resizer" onmousedown="startResize(event,'th-bin')"></div></th>
+          <th onclick="sortBy('minStock')" id="th-minStock"><div class="th-inner">Min Stock<span class="sort-ind">↕</span></div></th>
+          <th onclick="sortBy('reorderQty')" id="th-reorderQty"><div class="th-inner">Reorder Qty<span class="sort-ind">↕</span></div></th>
+          <th style="width:80px;max-width:80px">URL</th>
+          <th style="width:110px;min-width:110px;padding-left:4px;position:sticky;right:0;background:var(--bg);z-index:2;box-shadow:-2px 0 4px rgba(0,0,0,.06)"></th>
+        </tr>
+      </thead>
+      <tbody id="itemsBody"></tbody>
+    </table>
+  </div>
+  <div class="table-footer" id="tableFooter"></div>
+</div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay no-print" id="itemModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Add Item</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editId">
+      <!-- Screenshot import -->
+      <div id="urlImportRow" style="background:var(--bg);border:1px solid var(--border-light);border-radius:var(--radius);padding:10px 12px;margin-bottom:14px">
+        <div style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Import from Screenshot</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div id="screenshotPasteZone" onclick="document.getElementById('screenshotInput').click()"
+            style="flex:1;border:1.5px dashed var(--border);border-radius:var(--radius);padding:8px 12px;font-size:11px;color:var(--muted);cursor:pointer;text-align:center;transition:border-color .15s"
+            onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+            📋 Cmd+V to paste screenshot, or click to upload
+          </div>
+          <input type="file" id="screenshotInput" accept="image/*" style="display:none" onchange="importFromScreenshot(this)">
+        </div>
+        <div id="modalImportStatus" style="font-size:11px;color:var(--muted);margin-top:6px;min-height:14px"></div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Description</label>
+        <input type="text" id="fDesc" placeholder="e.g. T5 - 1/4&quot; 3-Flute End Mill" oninput="onDescInput(this.value)">
+      </div>
+      <div class="form-grid-2">
+        <div><label class="form-label">Part # / SKU</label><input type="text" id="fSku" placeholder="e.g. 03-0083" style="font-family:var(--mono)"></div>
+        <div><label class="form-label">Vendor</label><input type="text" id="fSupplier" placeholder="e.g. Haas"></div>
+      </div>
+      <div class="form-grid-2">
+        <div>
+          <label class="form-label">Category / Cell</label>
+          <div style="position:relative" id="catDropWrap">
+            <!-- Hidden real select for form value -->
+            <input type="hidden" id="fCategory">
+            <!-- Custom trigger -->
+            <button type="button" id="catDropBtn" onclick="toggleCatDrop()" style="width:100%;padding:8px 32px 8px 36px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:13px;background:var(--surface);color:var(--text);outline:none;text-align:left;cursor:pointer;position:relative;border-left-width:3px;transition:border-color .15s">
+              <span id="catDropLabel" style="color:var(--muted)">— select category —</span>
+            </button>
+            <div id="catDropDot" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);width:10px;height:10px;border-radius:50%;background:#ccc;pointer-events:none"></div>
+            <svg style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;color:var(--muted)" width="10" height="6" viewBox="0 0 10 6"><path d="M0 0l5 6 5-6z" fill="currentColor"/></svg>
+            <!-- Dropdown panel -->
+            <div id="catDropPanel" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:200;overflow:hidden;max-height:260px;overflow-y:auto" id="catDropPanel">
+              <div id="catDropList"></div>
+              <div style="border-top:1px solid var(--border-light);padding:6px 4px 4px">
+                <button type="button" onclick="openInlineCatCreate()" style="width:100%;padding:7px 12px;background:none;border:none;color:var(--accent);font-size:13px;font-family:var(--sans);cursor:pointer;text-align:left;border-radius:4px;display:flex;align-items:center;gap:6px">
+                  <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Create new category...
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- Inline new category form (hidden by default) -->
+          <div id="inlineCatCreate" style="display:none;margin-top:8px;padding:12px;background:var(--bg);border:1px solid var(--border-light);border-radius:var(--radius)">
+            <div style="font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px">New category</div>
+            <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+              <input type="text" id="newCatName" placeholder="Category name..." style="flex:1;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:13px;background:var(--surface);color:var(--text);outline:none">
+              <input type="color" id="newCatColor" value="#6b7280" style="width:40px;height:32px;padding:2px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer">
+            </div>
+            <div style="display:flex;gap:6px">
+              <button type="button" onclick="saveInlineCat()" style="flex:1;padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-family:var(--sans);font-size:12px;font-weight:500;cursor:pointer">Create & select</button>
+              <button type="button" onclick="cancelInlineCat()" style="padding:6px 12px;background:none;color:var(--muted);border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:12px;cursor:pointer">Cancel</button>
+            </div>
+          </div>
+        </div>
+        <div><label class="form-label">Location</label>
+          <div id="fBinWrap">
+            <input type="text" id="fBin" placeholder="e.g. A-01" style="font-family:var(--mono)">
+          </div>
+        </div>
+      </div>
+
+      <div class="form-grid-2">
+        <div>
+          <label class="form-label">Min Stock</label>
+          <div style="display:flex;gap:6px">
+            <input type="number" id="fMinStock" placeholder="4" min="1" style="width:70px;flex-shrink:0">
+            <input type="text" id="fMinUnit" placeholder="rolls, pcs, boxes..." style="flex:1;font-size:12px">
+          </div>
+          <p class="form-hint">Trigger level · unit label optional</p>
+        </div>
+        <div>
+          <label class="form-label">Reorder Qty</label>
+          <div style="display:flex;gap:6px">
+            <input type="number" id="fReorderQty" placeholder="1" min="1" style="width:70px;flex-shrink:0">
+            <input type="text" id="fReorderUnit" placeholder="case, box, each..." style="flex:1;font-size:12px">
+          </div>
+          <p class="form-hint">How many to order · unit label optional</p>
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Unit Price <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted);font-size:11px">(optional — used to total the order queue)</span></label>
+        <div style="position:relative;max-width:180px">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:13px;pointer-events:none">$</span>
+          <input type="number" id="fPrice" placeholder="0.00" min="0" step="0.01" style="padding-left:22px;font-family:var(--mono)">
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Order URL</label>
+        <input type="url" id="fUrl" placeholder="https://...">
+        <p class="form-hint">Direct product page — opens from the order queue</p>
+      </div>
+      <div class="form-row">
+        <label style="display:flex;align-items:center;gap:9px;cursor:pointer;font-size:13px;color:var(--text);font-weight:500">
+          <input type="checkbox" id="fPhysicalReorder" style="width:16px;height:16px;accent-color:#b26a00;cursor:pointer;flex-shrink:0">
+          <span>🏃 Restock by a <strong>physical run</strong> (local pickup — e.g. welding supply)</span>
+        </label>
+        <p class="form-hint">Tags the card with a PICKUP badge and drops it in the physical-reorder bin instead of an online order</p>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Item Photo <span style="font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted)">(optional — shown on larger labels)</span></label>
+        <div class="photo-upload" id="photoUploadZone">
+          <input type="file" id="fPhoto" accept="image/*" onchange="handlePhoto(this)">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:.4;margin-bottom:6px"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div style="font-size:12px;color:var(--muted)">Click or drag photo here</div>
+          <img id="photoPreview" class="photo-preview">
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="clearPhotoBtn" style="margin-top:6px;display:none" onclick="clearPhoto()">Remove photo</button>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+          <input type="url" id="fPhotoUrl" placeholder="or paste an image URL" oninput="handlePhotoUrl(this.value)"
+            style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);outline:none">
+        </div>
+      </div>
+    </div>
+
+      <!-- Sync group section -->
+      <div class="form-row" id="syncSection">
+        <label class="form-label" style="display:flex;align-items:center;gap:8px">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          Linked Items
+          <span style="font-size:10px;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;font-style:italic">syncs: description · SKU · vendor · URL · photo · price</span>
+        </label>
+        <div id="syncBody"></div>
+      </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveItem()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Label Modal -->
+<div class="modal-overlay no-print" id="labelModal">
+  <div class="modal" style="max-width:580px">
+    <div class="modal-header">
+      <div class="modal-title">Print Label</div>
+      <button class="btn btn-ghost btn-sm" onclick="closeLabelModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="size-selector">
+        <div class="size-opt" data-size="xs" onclick="setSize('xs',this)"><span class="size-name">Bin Label</span><span class="size-dim">1.5×1 in</span></div>
+        <div class="size-opt" data-size="sm" onclick="setSize('sm',this)"><span class="size-name">Tool Card</span><span class="size-dim">2×0.75 in</span></div>
+        <div class="size-opt" data-size="md" onclick="setSize('md',this)"><span class="size-name">Medium</span><span class="size-dim">3×2 in</span></div>
+        <div class="size-opt" data-size="lg" onclick="setSize('lg',this)"><span class="size-name">Large</span><span class="size-dim">4×3 in</span></div>
+        <div class="size-opt" data-size="full" onclick="setSize('full',this)"><span class="size-name">Full Card</span><span class="size-dim">3×5 in</span></div>
+        <div class="size-opt" data-size="ship" onclick="setSize('ship',this)"><span class="size-name">Shipping</span><span class="size-dim">4×6 in · B&amp;W</span></div>
+      </div>
+      <div class="label-preview-area"><div id="labelPreview"></div></div>
+      <p style="font-size:12px;color:var(--muted);text-align:center">Scan QR → adds to order queue</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeLabelModal()">Close</button>
+      <button class="btn btn-primary" onclick="printLabel()">Print</button>
+    </div>
+  </div>
+</div>
+
+<div id="printArea" style="display:none"></div>
+<div class="flash no-print" id="flash"></div>
+
+<script>
+let items = [], cartItemIds = new Set(), typeColors = {}, cats = {};
+let sortField = 'description', sortDir = 1;
+let labelItem = null, labelSize = 'sm';
+let currentPhotoData = null;
+let settings = {};
+let selectedIds = new Set();
+
+function toggleRowSelect(id, cb) {
+  if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+  updateBulkBar();
+  updateSelectAllState();
+}
+
+function toggleSelectAll(e) {
+  e.stopPropagation();
+  const cb = document.getElementById('selectAll');
+  // If called from th click (not the checkbox itself), toggle manually
+  if (e.target !== cb) cb.checked = !cb.checked;
+  const visible = [...document.querySelectorAll('.row-cb')];
+  if (cb.checked) {
+    visible.forEach(c => { selectedIds.add(parseInt(c.dataset.id)); c.checked = true; });
+  } else {
+    visible.forEach(c => { selectedIds.delete(parseInt(c.dataset.id)); c.checked = false; });
+  }
+  updateBulkBar();
+  // Highlight selected rows
+  document.querySelectorAll('tbody tr').forEach(tr => {
+    const id = parseInt(tr.querySelector('.row-cb')?.dataset.id);
+    if (id) tr.classList.toggle('row-selected', selectedIds.has(id));
+  });
+}
+
+function updateSelectAllState() {
+  const all = [...document.querySelectorAll('.row-cb')];
+  const cb = document.getElementById('selectAll');
+  if (!cb || !all.length) return;
+  const checkedCount = all.filter(c => c.checked).length;
+  cb.checked = checkedCount === all.length;
+  cb.indeterminate = checkedCount > 0 && checkedCount < all.length;
+  // Highlight row
+  all.forEach(c => {
+    const tr = c.closest('tr');
+    if (tr) tr.classList.toggle('row-selected', c.checked);
+  });
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  const count = selectedIds.size;
+  if (count > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('bulkCount').textContent = `${count} item${count!==1?'s':''} selected`;
+    // Populate bulk type select from typeColors
+    // Populate bulk category select
+    const catSel = document.getElementById('bulkCategorySelect');
+    if (catSel && Object.keys(cats).length) {
+      const entries = Object.entries(cats).sort((a,b)=>a[1].label.localeCompare(b[1].label));
+      let catHtml = '<option value="" style="color:#1a1916">— category —</option>';
+      entries.forEach(([color, cat]) => {
+        catHtml += `<option value="${esc(color)}" style="color:#1a1916">${esc(cat.label)}</option>`;
+      });
+      catSel.innerHTML = catHtml;
+    }
+    const sel = document.getElementById('bulkTypeSelect');
+    if (sel && Object.keys(typeColors).length) {
+      const colorOrder = ['#1a7a3a','#1a4fa8','#c41e1e','#b8860a','#c95e0a','#6d28d9','#6b7280'];
+      const catNames = {'#1a7a3a':'Aluminum Cutting','#1a4fa8':'Steel/Stainless','#c41e1e':'Drills & Holemaking','#b8860a':'Threading','#c95e0a':'Indexable','#6d28d9':'Specialty','#6b7280':'Other'};
+      const grouped = {};
+      colorOrder.forEach(c => grouped[c] = []);
+      Object.entries(typeColors).sort((a,b)=>a[0].localeCompare(b[0])).forEach(([name,color])=>{
+        if(grouped[color]) grouped[color].push(name);
+      });
+      let html = '<option value="" style="color:#1a1916">— type —</option>';
+      colorOrder.forEach(color => {
+        const names = grouped[color]; if (!names.length) return;
+        html += `<optgroup label="${catNames[color]||color}" style="color:#1a1916">`;
+        names.forEach(name => {
+          html += `<option value="${esc(name)}" style="color:#1a1916">${esc(name.replace(/\b\w/g,c=>c.toUpperCase()))}</option>`;
+        });
+        html += '</optgroup>';
+      });
+      sel.innerHTML = html;
+    }
+    // Vendor + Location datalists — pick an existing value or type a new one.
+    const vList = document.getElementById('bulkVendorList');
+    if (vList) {
+      const vend = [...new Set(items.map(i => i.supplier).filter(Boolean))].sort();
+      vList.innerHTML = vend.map(v => `<option value="${esc(v)}"></option>`).join('');
+    }
+    const lList = document.getElementById('bulkLocList');
+    if (lList) {
+      const bins = new Set(items.map(i => i.bin).filter(Boolean));
+      Object.values(cats).forEach(c => { if (c && c.subtypes) Object.values(c.subtypes).forEach(l => bins.add(l)); });
+      lList.innerHTML = [...bins].sort().map(v => `<option value="${esc(v)}"></option>`).join('');
+    }
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+// ── Bulk edit ──────────────────────────────────────────────────────────────
+// One helper drives every bulk control: PUT the patch to each selected item,
+// update the local copy, flash, re-render. Every control applies on `change`.
+async function bulkApply(patch, label) {
+  const ids = [...selectedIds];
+  if (!ids.length || !patch || !Object.keys(patch).length) return;
+  await Promise.all(ids.map(id =>
+    fetch(`/api/items/${id}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+  ));
+  ids.forEach(id => { const it = items.find(i => i.id === id); if (it) Object.assign(it, patch); });
+  showFlash(`${label} · ${ids.length} item${ids.length !== 1 ? 's' : ''}`, 'success');
+  renderItems();
+}
+
+function bulkCell(sel) {
+  const color = sel.value;
+  if (color) bulkApply({ category: color }, `Cell → ${(cats[color] && cats[color].label) || 'cell'}`);
+  sel.value = '';
+}
+
+function bulkType(sel) {
+  const type = sel.value;
+  if (!type) { sel.value = ''; return; }
+  const color = typeColors[type] || null;
+  bulkApply({ itemType: type, ...(color ? { category: color } : {}) }, `Type → ${type}`);
+  sel.value = '';
+}
+
+function bulkVendor(inp) {
+  const v = inp.value.trim();
+  if (v) bulkApply({ supplier: v }, `Vendor → ${v}`);
+  inp.value = '';
+}
+
+function bulkLocation(inp) {
+  const v = inp.value.trim();
+  if (v) bulkApply({ bin: v }, `Location → ${v}`);
+  inp.value = '';
+}
+
+function bulkNum(inp, field) {
+  const raw = inp.value.trim();
+  if (raw === '') return;
+  const value = field === 'price' ? (parseFloat(raw) || 0) : (parseInt(raw, 10) || 0);
+  const labels = { minStock: 'Min stock', reorderQty: 'Reorder qty', price: 'Price' };
+  bulkApply({ [field]: value }, `${labels[field] || field} → ${value}`);
+  inp.value = '';
+}
+
+// Handle Cmd+V paste of screenshot when modal is open
+document.addEventListener('paste', function(e) {
+  if (!document.getElementById('itemModal').classList.contains('open')) return;
+  // Don't intercept paste when user is typing in a text field
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  const items = [...(e.clipboardData?.items || [])];
+  const imgItem = items.find(i => i.type.startsWith('image/'));
+  if (!imgItem) return;
+  e.preventDefault();
+  const file = imgItem.getAsFile();
+  if (file) processScreenshot(file);
+});
+
+function importFromScreenshot(input) {
+  if (input.files[0]) processScreenshot(input.files[0]);
+}
+
+async function processScreenshot(file) {
+  const statusEl = document.getElementById('modalImportStatus');
+  const zoneEl = document.getElementById('screenshotPasteZone');
+  statusEl.textContent = '🔍 Analyzing screenshot with AI…';
+  statusEl.style.color = 'var(--muted)';
+  zoneEl.textContent = '⏳ Processing…';
+
+  try {
+    // Downscale in the browser before upload. A raw screenshot can be several
+    // MB; parsing and re-serializing that in the Worker blows the Pages CPU
+    // limit and Cloudflare kills the request with a 502. Anthropic also
+    // downsamples anything past ~1568px, so a right-sized JPEG loses no
+    // accuracy while making the payload ~10× smaller and the call faster.
+    const { image, mediaType } = await downscaleForUpload(file);
+
+    const res = await fetch('/api/screenshot-import', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ image, mediaType })
+    });
+    const raw = await res.text();
+    let data;
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      // Non-JSON response = failure before our handler (timeout, Access, size limit).
+      // Surface the real status + snippet instead of a misleading generic message.
+      const snippet = raw.trim().slice(0, 120).replace(/\s+/g, ' ');
+      statusEl.textContent = `✗ Server returned ${res.status} (not JSON): ${snippet || '(empty)'}`;
+      statusEl.style.color = '#9b2020';
+      zoneEl.textContent = '📋 Paste or click to upload a screenshot';
+      return;
+    }
+    if (data.error) {
+      statusEl.textContent = '✗ ' + data.error + (data.detail ? ` — ${data.detail}` : '');
+      statusEl.style.color = '#9b2020';
+      zoneEl.textContent = '📋 Paste or click to upload a screenshot';
+      return;
+    }
+    // Fill in fields
+    if (data.description) document.getElementById('fDesc').value = data.description;
+    if (data.sku) document.getElementById('fSku').value = data.sku;
+    if (data.supplier) document.getElementById('fSupplier').value = data.supplier;
+    if (data.price) document.getElementById('fPrice').value = data.price;
+    if (data.url) document.getElementById('fUrl').value = data.url;
+    if (data.description) onDescInput(data.description);
+    statusEl.textContent = '✓ Filled in from screenshot — review and save';
+    statusEl.style.color = '#1e6b3e';
+    zoneEl.textContent = '✓ Screenshot processed';
+  } catch (err) {
+    statusEl.textContent = '✗ Could not read that image: ' + (err && err.message ? err.message : 'unknown error');
+    statusEl.style.color = '#9b2020';
+    zoneEl.textContent = '📋 Paste or click to upload a screenshot';
+  }
+}
+
+// Load an image file, scale its long edge down to maxEdge px, and return a
+// JPEG base64 payload small enough to stay well under the Worker CPU limit.
+function downscaleForUpload(file, maxEdge = 1568, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      // White backdrop so transparent PNGs don't render as black under JPEG.
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve({ image: dataUrl.split(',')[1], mediaType: 'image/jpeg' });
     };
-    if (!body.description.trim()) { dlg.querySelector('#f-err').textContent = 'Description is required.'; return; }
-    const res = item
-      ? await api('/api/items/' + item.id, { method: 'PUT', body: JSON.stringify(body) })
-      : await api('/api/items', { method: 'POST', body: JSON.stringify(body) });
-    if (!res.ok) { dlg.querySelector('#f-err').textContent = 'Could not save — ' + res.status; return; }
-    dlg.close();
-    await refresh();
-  };
-  dlg.querySelector('#f-description').focus();
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('image decode failed')); };
+    img.src = url;
+  });
 }
 
-function settingsDialog() {
-  const dlg = openDialog('Settings', `
-    <h4>Cells</h4><div id="cells"></div><button class="ghost" id="add-cell">Add cell</button>
-    <h4>Locations</h4><div id="locs"></div><button class="ghost" id="add-loc">Add location</button>
-    <h4>Item types</h4><div id="types"></div><button class="ghost" id="add-type">Add type</button>
-    <div class="err" id="s-err"></div>
-  `, `<span class="muted" style="font-size:12px;align-self:center">Saving replaces each list.</span><button id="save">Save settings</button>`);
+async function modalImport(source) {
+  const url = document.getElementById('modalImportUrl').value.trim();
+  if (!url) { document.getElementById('modalImportStatus').textContent = 'Paste a URL first'; return; }
 
-  const cells = dlg.querySelector('#cells'), locs = dlg.querySelector('#locs'), types = dlg.querySelector('#types');
-  const removable = (row) => {
-    row.querySelector('[data-rm]').onclick = () => row.remove();
-    return row;
-  };
-  const cellRow = (color = '#6b7280', label = '') => removable($(`<div class="cfg-row">
-    <input type="color" value="${esc(color)}" data-color><input placeholder="Cell name" value="${esc(label)}" data-label class="grow">
-    <button class="link" data-rm>Remove</button></div>`));
-  const locRow = (name = '') => removable($(`<div class="cfg-row">
-    <input placeholder="Location name" value="${esc(name)}" data-name class="grow"><button class="link" data-rm>Remove</button></div>`));
-  const typeRow = (name = '', color = '#6b7280') => removable($(`<div class="cfg-row">
-    <input type="color" value="${esc(color)}" data-color><input placeholder="Type name" value="${esc(name)}" data-name class="grow">
-    <button class="link" data-rm>Remove</button></div>`));
+  let detected = source;
+  if (source === 'auto') {
+    if (url.includes('mcmaster.com')) detected = 'mcmaster';
+    else if (url.includes('amazon.com')) detected = 'amazon';
+    else { document.getElementById('modalImportStatus').textContent = 'Could not detect — try McMaster or Amazon button'; return; }
+  }
 
-  for (const [color, c] of Object.entries(state.cells)) cells.append(cellRow(color, c.label));
-  for (const name of state.locations) locs.append(locRow(name));
-  for (const [name, t] of Object.entries(state.types)) types.append(typeRow(name, t.color));
+  document.getElementById('modalImportStatus').textContent = 'Fetching…';
+  document.getElementById('modalImportStatus').style.color = 'var(--muted)';
 
-  dlg.querySelector('#add-cell').onclick = () => cells.append(cellRow());
-  dlg.querySelector('#add-loc').onclick = () => locs.append(locRow());
-  dlg.querySelector('#add-type').onclick = () => types.append(typeRow());
-
-  dlg.querySelector('#save').onclick = async () => {
-    const cellMap = {};
-    for (const r of cells.querySelectorAll('.cfg-row')) {
-      const color = r.querySelector('[data-color]').value;
-      // Keep any subtypes the existing cell already had; this editor doesn't touch them.
-      cellMap[color] = { label: r.querySelector('[data-label]').value.trim(), subtypes: (state.cells[color] || {}).subtypes || {} };
+  try {
+    const res = await fetch('/api/scrape-url', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url, source: detected})
+    });
+    const data = await res.json();
+    if (data.error) {
+      document.getElementById('modalImportStatus').textContent = '✗ ' + data.error;
+      document.getElementById('modalImportStatus').style.color = '#9b2020';
+      return;
     }
-    const typeMap = {};
-    for (const r of types.querySelectorAll('.cfg-row')) {
-      const name = r.querySelector('[data-name]').value.trim();
-      if (name) typeMap[name] = { color: r.querySelector('[data-color]').value };
+    // Fill in form fields
+    if (data.description) document.getElementById('fDesc').value = data.description;
+    if (data.sku) document.getElementById('fSku').value = data.sku;
+    if (data.supplier) document.getElementById('fSupplier').value = data.supplier;
+    if (data.price) document.getElementById('fPrice').value = data.price;
+    if (data.url) document.getElementById('fUrl').value = data.url;
+    if (data.photo) {
+      currentPhotoData = data.photo;
+      const preview = document.getElementById('photoPreview');
+      preview.src = data.photo; preview.style.display = 'block';
+      document.getElementById('clearPhotoBtn').style.display = 'inline-flex';
+      document.querySelector('#photoUploadZone svg').style.display = 'none';
+      document.querySelector('#photoUploadZone div').style.display = 'none';
     }
-    const locList = [...locs.querySelectorAll('[data-name]')].map((i) => i.value);
-
-    const results = await Promise.all([
-      api('/api/categories', { method: 'PUT', body: JSON.stringify(cellMap) }),
-      api('/api/types', { method: 'PUT', body: JSON.stringify(typeMap) }),
-      api('/api/locations', { method: 'PUT', body: JSON.stringify(locList) }),
-    ]);
-    if (results.some((r) => !r.ok)) { dlg.querySelector('#s-err').textContent = 'Some settings did not save.'; return; }
-    dlg.close();
-    await refresh();
-  };
+    if (data.description) onDescInput(data.description);
+    const isMcMaster = detected === 'mcmaster';
+    const msg = isMcMaster
+      ? `✓ SKU + photo filled. Add description & price manually — <a href="${url}" target="_blank" style="color:var(--accent)">open McMaster page ↗</a>`
+      : '✓ Filled in — review and save';
+    document.getElementById('modalImportStatus').innerHTML = msg;
+    document.getElementById('modalImportStatus').style.color = '#1e6b3e';
+  } catch(e) {
+    document.getElementById('modalImportStatus').textContent = '✗ Network error';
+    document.getElementById('modalImportStatus').style.color = '#9b2020';
+  }
 }
 
-boot();
+function clearSelection() {
+  selectedIds.clear();
+  document.querySelectorAll('.row-cb').forEach(c => c.checked = false);
+  const sa = document.getElementById('selectAll');
+  if (sa) { sa.checked = false; sa.indeterminate = false; }
+  document.querySelectorAll('tbody tr').forEach(tr => tr.classList.remove('row-selected'));
+  updateBulkBar();
+}
+
+async function printAllVisible() {
+  const size = document.getElementById('printAllSize').value;
+  const copies = parseInt(document.getElementById('printCopies').value) || 1;
+  // Get currently visible/filtered items
+  const visibleItems = getFilteredItems();
+  if (!visibleItems.length) { showFlash('No items to print'); return; }
+  showFlash(`Generating ${visibleItems.length} labels…`);
+  await doPrint(visibleItems, size, copies);
+}
+
+async function bulkPrint(size) {
+  if (!selectedIds.size) return;
+  const selectedItems = [...selectedIds].map(id => items.find(i => i.id === id)).filter(Boolean);
+  const copies = parseInt(document.getElementById('printCopies')?.value) || 1;
+  showFlash(`Generating ${selectedItems.length} labels…`);
+  await doPrint(selectedItems, size, copies);
+}
+
+async function doPrint(itemList, size, copies=1) {
+
+  // Expand copies
+  const expandedList = [];
+  for (let c = 0; c < copies; c++) itemList.forEach(i => expandedList.push(i));
+
+  // Fetch all QR codes in parallel
+  const qrMap = {};
+  await Promise.all(itemList.map(async item => {
+    const { qr } = await fetch(`/api/items/${item.id}/qr`).then(r => r.json());
+    qrMap[item.id] = qr;
+  }));
+
+  const pa = document.getElementById('printArea');
+
+  // For md (3×2), pair 2 labels per page stacked vertically to fill a 3×5 card
+  let pages;
+  if (size === 'md') {
+    pages = [];
+    for (let i = 0; i < expandedList.length; i += 2) {
+      const a = expandedList[i];
+      const b = expandedList[i + 1];
+      pages.push(`
+        <div class="label-page" style="display:flex;flex-direction:column;gap:24px">
+          <div style="line-height:0;flex-shrink:0">${pickupWrap(a, buildLabel(a, qrMap[a.id], size))}</div>
+          ${b ? `<div style="line-height:0;flex-shrink:0">${pickupWrap(b, buildLabel(b, qrMap[b.id], size))}</div>` : ''}
+        </div>`);
+    }
+  } else {
+    pages = expandedList.map(item => `
+      <div class="label-page">
+        ${pickupWrap(item, buildLabel(item, qrMap[item.id], size))}
+      </div>`);
+  }
+
+  // Page setup per size. Sizes printed on exact-size stock (index cards, shipping labels)
+  // get an EXPLICIT page size + zero margin, so browsers — Safari especially, which otherwise
+  // scales web content "to fit" — print them at true physical size instead of rescaling.
+  // Everything else keeps a small default margin so stickers don't need manual trimming.
+  const EXACT_STOCK = { full: '3in 5in', ship: '4in 6in' }; // index card = full, shipping = ship
+  const pageCss = EXACT_STOCK[size]
+    ? `@page { size: ${EXACT_STOCK[size]}; margin: 0; }`
+    : '@page { size: auto; margin: 0.05in; }';
+  pa.innerHTML = `
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+      ${pageCss}
+      body { margin: 0; background: #fff; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .label-page { page-break-after: always; display: flex; align-items: flex-start; justify-content: flex-start; transform: none !important; }
+      .label-page > div { transform: none !important; flex-shrink: 0; }
+      .label-page:last-child { page-break-after: auto; }
+    </style>
+    ${pages.join('')}
+  `;
+
+  pa.style.display = 'block';
+  document.querySelector('.main').style.display = 'none';
+  document.querySelector('header').style.display = 'none';
+  document.querySelectorAll('.modal-overlay,.scan-banner').forEach(m => m.style.display = 'none');
+  document.getElementById('flash').style.display = 'none';
+
+  // Wait for all images (QR codes, photos) to finish loading before printing
+  await new Promise(res => setTimeout(res, 100)); // let DOM settle first
+  const allImgs = [...pa.querySelectorAll('img')];
+  await Promise.all(allImgs.map(img =>
+    img.complete && img.naturalWidth > 0 ? Promise.resolve() :
+    new Promise(res => { img.onload = res; img.onerror = res; setTimeout(res, 2000); })
+  ));
+  // Extra delay for fonts/layout to settle
+  await new Promise(res => setTimeout(res, 500));
+
+  // Cleanup MUST run after the dialog closes. On macOS (Safari/Chrome) window.print()
+  // can return before the print job is rendered, so clearing synchronously here wiped the
+  // content and produced blank pages. Restore on the afterprint event, with a fallback timeout.
+  const restore = () => {
+    pa.style.display = 'none'; pa.innerHTML = '';
+    document.querySelector('.main').style.display = '';
+    document.querySelector('header').style.display = '';
+    document.querySelectorAll('.modal-overlay').forEach(m => m.style.display = '');
+    document.getElementById('flash').style.display = '';
+    window.removeEventListener('afterprint', restore);
+  };
+  window.addEventListener('afterprint', restore);
+  window.print();
+  setTimeout(() => { if (pa.style.display !== 'none') restore(); }, 60000);
+}
+// Check if running in dev mode and show banner
+fetch('/api/env').then(r=>r.json()).then(env=>{
+  if (env.dev) { document.getElementById('devBanner').style.display = 'block'; document.title = '⚠ DEV — ' + document.title; }
+}).catch(()=>{});
+
+// ── Column resizing ──────────────────────────────────────
+function startResize(e, thId) {
+  e.preventDefault();
+  e.stopPropagation();
+  const th = document.getElementById(thId);
+  if (!th) return;
+  const startX = e.pageX;
+  const startW = th.offsetWidth;
+  const resizer = e.target;
+  resizer.classList.add('resizing');
+  function onMove(e) {
+    const newW = Math.max(60, startW + e.pageX - startX);
+    th.style.width = newW + 'px';
+  }
+  function onUp() {
+    resizer.classList.remove('resizing');
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    // Save column widths to localStorage
+    const widths = {};
+    ['th-description','th-sku','th-supplier','th-bin','th-minStock','th-reorderQty'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) widths[id] = el.offsetWidth;
+    });
+    localStorage.setItem('kanban_col_widths', JSON.stringify(widths));
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+function loadColWidths() {
+  try {
+    const widths = JSON.parse(localStorage.getItem('kanban_col_widths') || '{}');
+    Object.entries(widths).forEach(([id, w]) => {
+      const el = document.getElementById(id);
+      if (el) el.style.width = w + 'px';
+    });
+  } catch(e) {}
+}
+
+// Auto-open item if ?edit=ID in URL (e.g. from receiving page)
+const _urlParams = new URLSearchParams(window.location.search);
+const _editId = _urlParams.get('edit');
+if (_editId) {
+  // Wait for items to load then open edit
+  const _editWait = setInterval(() => {
+    if (items.length > 0) {
+      clearInterval(_editWait);
+      const item = items.find(i => i.id === parseInt(_editId));
+      if (item) openEdit(item.id);
+      history.replaceState({}, '', '/');
+    }
+  }, 100);
+}
+
+let scanMode = false;
+let currentSyncGroup = null;
+let scanBuffer = '', scanTimer = null;
+
+// ── Settings ──────────────────────────────────────────
+function loadSettings() {
+  settings = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  const accent = settings.accentColor || '#c4351c';
+  document.documentElement.style.setProperty('--accent', accent);
+  if (settings.fontSize) document.body.style.fontSize = settings.fontSize;
+  const name = (settings.shopName || 'YOUR SHOP').toUpperCase();
+  document.getElementById('logoText').textContent = name + ' / INVENTORY'; // version shown separately
+  document.title = 'KANBAN · Inventory';
+  labelSize = settings.defaultLabelSize || 'sm';
+  document.querySelectorAll('.size-opt').forEach(el => el.classList.toggle('active', el.dataset.size === labelSize));
+}
+
+// ── Data ──────────────────────────────────────────────
+async function load() {
+  loadSettings();
+  const [ir, cr, or_, tr, catr, locr] = await Promise.all([fetch('/api/items'), fetch('/api/cart'), fetch('/api/orders'), fetch('/api/types'), fetch('/api/categories'), fetch('/api/locations')]);
+  items = await ir.json();
+  const cd = await cr.json();
+  const od = await or_.json();
+  const td = await tr.json();
+  const catd = await catr.json();
+  const locData = await locr.json();
+  typeColors = {};
+  Object.entries(td).forEach(([name,cfg]) => { typeColors[name] = cfg.color; });
+  cats = catd;
+  const binList = document.getElementById('binList');
+  if (binList) binList.innerHTML = (locData||[]).map(l=>`<option value="${l}">`).join('');
+  cartItemIds = new Set(cd.items.map(c => c.itemId));
+  // Update receiving badge
+  const rCount = od.items.length;
+  const rBadge = document.getElementById('receivingCount');
+  if (rCount > 0) {
+    rBadge.textContent = rCount;
+    rBadge.classList.remove('hidden');
+  } else {
+    rBadge.classList.add('hidden');
+  }
+  populateFilters();
+  renderItems();
+  renderStats();
+  updateBadge();
+  populateTypeDatalist();
+}
+
+function populateTypeDatalist() {
+  // no-op — item types removed
+}
+
+function populateFilters() {
+  const vendors = [...new Set(items.map(i=>i.supplier).filter(Boolean))].sort();
+  const cf = document.getElementById('categoryFilter');
+  const tf = document.getElementById('typeFilter');
+  const vf = document.getElementById('vendorFilter');
+  const cc = cf.value, cv = vf.value;
+
+  // Build a map of cell color -> cell for items that actually exist
+  // For tool items: their item.category is a subtype color; map to parent cell
+  // For regular items: item.category is already a cell color
+  const usedCellColors = new Set();
+  items.forEach(i => {
+    usedCellColors.add(getItemCellColor(i));
+  });
+
+  const cellEntries = Object.entries(cats)
+    .filter(([color]) => usedCellColors.has(color))
+    .sort((a,b) => a[1].label.localeCompare(b[1].label));
+
+  cf.innerHTML = '<option value="">All cells</option>' +
+    cellEntries.map(([color, cat]) =>
+      `<option value="${color}" ${color===cc?'selected':''}>${esc(cat.label)}</option>`
+    ).join('');
+  cf.value = cc;
+
+  // Hide type filter — no longer used
+  const typeWrap = document.getElementById('csWrapType');
+  if (typeWrap) typeWrap.style.display = 'none';
+
+  vf.innerHTML = '<option value="">All vendors</option>' +
+    vendors.map(v=>`<option value="${esc(v)}" ${v===cv?'selected':''}>${esc(v)}</option>`).join('');
+  vf.value = cv;
+
+  // Build color-select panels — category panel shows cells
+  const catOptions = cellEntries.map(([color, cat]) => ({value:color, label:cat.label, color}));
+  buildCsPanel('category', catOptions);
+}
+
+function renderStats() {
+  const types=new Set(items.map(i=>i.itemType).filter(Boolean));
+  const vendors=new Set(items.map(i=>i.supplier).filter(Boolean));
+  document.getElementById('statTotal').textContent=items.length;
+  document.getElementById('statCart').textContent=cartItemIds.size;
+  document.getElementById('statTypes').textContent=types.size;
+  document.getElementById('statVendors').textContent=vendors.size;
+}
+
+function updateBadge() {
+  const el=document.getElementById('cartCount');
+  cartItemIds.size>0?(el.textContent=cartItemIds.size,el.classList.remove('hidden')):el.classList.add('hidden');
+}
+
+// ── Color-aware custom selects ────────────────────────────
+let csState = { category: '', type: '' };
+
+function toggleCs(name) {
+  const panel = document.getElementById('csPanel' + name.charAt(0).toUpperCase() + name.slice(1));
+  const isOpen = panel.classList.contains('open');
+  // Close all panels first
+  document.querySelectorAll('.cs-panel').forEach(p => p.classList.remove('open'));
+  document.removeEventListener('click', csCloseOutside);
+  if (!isOpen) {
+    panel.classList.add('open');
+    setTimeout(() => document.addEventListener('click', csCloseOutside), 0);
+  }
+}
+
+function csCloseOutside(e) {
+  if (!e.target.closest('.cs-wrap')) {
+    document.querySelectorAll('.cs-panel').forEach(p => p.classList.remove('open'));
+    document.removeEventListener('click', csCloseOutside);
+  }
+}
+
+function csSelect(name, value, label, color) {
+  csState[name] = value;
+  document.getElementById('categoryFilter' === ('categoryFilter') ? 'categoryFilter' : name === 'category' ? 'categoryFilter' : 'typeFilter').value = value;
+  // Actually set the hidden input
+  if (name === 'category') document.getElementById('categoryFilter').value = value;
+  if (name === 'type') document.getElementById('typeFilter').value = value;
+
+  const dot = document.getElementById('csDot' + name.charAt(0).toUpperCase() + name.slice(1));
+  const lbl = document.getElementById('csLabel' + name.charAt(0).toUpperCase() + name.slice(1));
+  const btn = document.getElementById('csBtn' + name.charAt(0).toUpperCase() + name.slice(1));
+
+  if (value && color) {
+    dot.style.background = color;
+    dot.classList.add('visible');
+    btn.classList.add('active');
+    btn.style.borderLeftColor = color;
+    btn.style.borderLeftWidth = '3px';
+  } else {
+    dot.classList.remove('visible');
+    btn.classList.remove('active');
+    btn.style.borderLeftColor = '';
+    btn.style.borderLeftWidth = '';
+  }
+  lbl.textContent = label || (name === 'category' ? 'All categories' : 'All types');
+
+  document.querySelectorAll('.cs-panel').forEach(p => p.classList.remove('open'));
+  document.removeEventListener('click', csCloseOutside);
+
+  if (name === 'category') onCategoryFilter();
+  else renderItems();
+}
+
+function buildCsPanel(name, options) {
+  const panel = document.getElementById('csPanel' + name.charAt(0).toUpperCase() + name.slice(1));
+  if (name === 'category') {
+    // Multi-checkbox panel
+    panel.innerHTML = `<div style="padding:6px 0">
+      <div class="cs-option" style="font-size:11px;color:var(--muted);padding:4px 12px 6px;border-bottom:1px solid var(--border-light);cursor:default;display:flex;justify-content:space-between;align-items:center">
+        <span>Select categories</span>
+        <span style="cursor:pointer;color:var(--accent)" onclick="selectedCategories.clear();document.querySelectorAll('.cat-checkbox').forEach(c=>c.checked=false);updateCategoryLabel();renderItems();">Clear</span>
+      </div>
+      ${options.map(o => `
+      <label class="cs-option" style="cursor:pointer;gap:9px" onclick="event.stopPropagation()">
+        <input type="checkbox" class="cat-checkbox" value="${esc(o.value)}" onchange="toggleCategoryCheck('${esc(o.value)}',this.checked)" ${selectedCategories.has(o.value)?'checked':''} style="width:13px;height:13px;accent-color:${o.color};flex-shrink:0">
+        <span class="cs-opt-dot" style="background:${o.color};flex-shrink:0"></span>
+        ${esc(o.label)}
+      </label>`).join('')}
+    </div>`;
+  } else {
+    // Type — keep single select
+    const current = document.getElementById('typeFilter').value;
+    panel.innerHTML = [{value:'', label:'All types', color:null}, ...options]
+      .map(o => `<div class="cs-option ${o.value===current?'selected':''}" onclick="csSelect('type','${esc(o.value)}','${esc(o.label)}',${o.color?`'${o.color}'`:'null'})">
+        <span class="cs-opt-dot" style="background:${o.color||'transparent'};border:${o.color?'none':'1px solid var(--border)'}"></span>
+        ${esc(o.label)}
+      </div>`).join('');
+  }
+}
+
+function onCategoryFilter() {
+  const cf = document.getElementById('categoryFilter').value;
+  const tf = document.getElementById('typeFilter').value;
+  // If selected type doesn't belong to new category, reset it
+  if (cf && tf && (typeColors[tf]||'#6b7280') !== cf) {
+    document.getElementById('typeFilter').value = '';
+    csSelect('type', '', 'All types', null);
+    return; // csSelect calls renderItems
+  }
+  populateFilters();
+  renderItems();
+}
+
+function sortBy(field) {
+  sortDir=sortField===field?sortDir*-1:1; sortField=field;
+  document.querySelectorAll('thead th').forEach(th=>{
+    th.classList.remove('sorted'); const si=th.querySelector('.sort-ind'); if(si) si.textContent='↕';
+  });
+  const th=document.getElementById('th-'+field);
+  if(th){th.classList.add('sorted'); const si=th.querySelector('.sort-ind'); if(si) si.textContent=sortDir===1?'↑':'↓';}
+  renderItems();
+}
+
+// Tool categories (colors) — anything in these is a "tool"
+// Derived dynamically from cats — any cell that has subtypes is a "tool-type" cell
+// Items in such cells use their category color as a subtype color
+function getToolSubtypeColors() {
+  const s = new Set();
+  Object.entries(cats).forEach(([color, cat]) => {
+    if (cat.subtypes && Object.keys(cat.subtypes).length > 0) {
+      Object.keys(cat.subtypes).forEach(sc => s.add(sc));
+    }
+  });
+  return s;
+}
+// Helper: get the effective display color for an item
+function getItemColor(item) {
+  // If item.category is a subtype color, use it directly
+  // If item.category is a cell color, use it
+  // Fallback to grey
+  if (!item.category) return '#6b7280';
+  return item.category;
+}
+// Helper: get the parent cell color for an item (for cell-level filtering)
+function getItemCellColor(item) {
+  if (!item.category) return '#6b7280';
+  // Check if this color is a subtype in any cell
+  for (const [cellColor, cell] of Object.entries(cats)) {
+    if (cell.subtypes && cell.subtypes[item.category] !== undefined) {
+      return cellColor;
+    }
+  }
+  // Otherwise it's already a cell color
+  return item.category;
+}
+// Helper: is this item in a "tool crib"-style cell (cell has subtypes)?
+// A "cutting tool" (Tools filter) is a tool-crib item: its description is numbered
+// T1, T182, … (the reliable shop marker), OR it's been assigned a cutting-tool type
+// slot (end mill, drill, tap, …) even if it doesn't have a number yet. This is what
+// "starts with TXXX and fits the defined category slots" means in the data.
+function isToolItem(item) {
+  const desc = (item.description || '').trim();
+  return /^T\d/.test(desc) || !!(item.itemType && String(item.itemType).trim());
+}
+let selectedCategories = new Set(); // empty = all
+let viewMode = 'all'; // 'all' | 'tools' | 'other'
+
+function setViewMode(mode) {
+  viewMode = mode;
+  selectedCategories.clear();
+  document.getElementById('categoryFilter').value = '';
+  // Update button styles
+  ['all','tools','other'].forEach(m => {
+    const btn = document.getElementById('btnView' + m.charAt(0).toUpperCase() + m.slice(1));
+    if (btn) {
+      btn.style.background = m === mode ? 'var(--accent)' : 'var(--surface)';
+      btn.style.color = m === mode ? 'var(--paper)' : 'var(--muted)';
+      btn.style.borderColor = m === mode ? 'var(--accent)' : 'var(--border)';
+    }
+  });
+  // Reset category panel checkboxes
+  document.querySelectorAll('.cat-checkbox').forEach(cb => cb.checked = false);
+  updateCategoryLabel();
+  renderItems();
+}
+
+function updateCategoryLabel() {
+  const dot = document.getElementById('csDotCategory');
+  const lbl = document.getElementById('csLabelCategory');
+  const btn = document.getElementById('csBtnCategory');
+  if (selectedCategories.size === 0) {
+    dot.classList.remove('visible');
+    btn.style.borderLeftWidth = '';
+    btn.style.borderLeftColor = '';
+    lbl.textContent = 'All categories';
+  } else if (selectedCategories.size === 1) {
+    const color = [...selectedCategories][0];
+    dot.style.background = color;
+    dot.classList.add('visible');
+    btn.style.borderLeftWidth = '3px';
+    btn.style.borderLeftColor = color;
+    lbl.textContent = cats[color]?.label || color;
+  } else {
+    dot.classList.remove('visible');
+    btn.style.borderLeftWidth = '';
+    btn.style.borderLeftColor = '';
+    lbl.textContent = selectedCategories.size + ' categories';
+  }
+}
+
+function toggleCategoryCheck(color, checked) {
+  if (checked) selectedCategories.add(color);
+  else selectedCategories.delete(color);
+  // Reset view mode to all when manually picking
+  viewMode = 'all';
+  ['all','tools','other'].forEach(m => {
+    const btn = document.getElementById('btnView' + m.charAt(0).toUpperCase() + m.slice(1));
+    if (btn) {
+      btn.style.background = m === 'all' ? 'var(--text)' : 'var(--surface)';
+      btn.style.color = m === 'all' ? '#fff' : 'var(--muted)';
+      btn.style.borderColor = m === 'all' ? 'var(--text)' : 'var(--border)';
+    }
+  });
+  updateCategoryLabel();
+  renderItems();
+}
+
+function getFilteredItems() {
+  const search = (document.getElementById('searchInput').value||'').toLowerCase();
+  const tf = document.getElementById('typeFilter').value;
+  const vf = document.getElementById('vendorFilter').value;
+  return items.filter(item => {
+    const itemCat = getItemCellColor(item);
+    // Category multi-filter (filter by cell)
+    if (selectedCategories.size > 0 && !selectedCategories.has(itemCat)) return false;
+    // View mode filter
+    if (viewMode === 'tools' && !isToolItem(item)) return false;
+    if (viewMode === 'other' && isToolItem(item)) return false;
+    if (tf && item.itemType !== tf) return false;
+    if (vf && item.supplier !== vf) return false;
+    if (search) {
+      const hay = [item.description, item.sku, item.supplier, item.itemType, item.bin].join(' ').toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    return true;
+  });
+}
+
+function renderItems() {
+  loadColWidths();
+  const q=document.getElementById('searchInput').value.toLowerCase().trim();
+  const cf=document.getElementById('categoryFilter').value;
+  const tf=document.getElementById('typeFilter').value;
+  const vf=document.getElementById('vendorFilter').value;
+  let filtered=items.filter(i=>{
+    const ms=!q||[i.description,i.sku,i.supplier,i.itemType,i.bin].some(v=>v&&String(v).toLowerCase().includes(q));
+    const itemCat = getItemCellColor(i);
+    const matchCat = selectedCategories.size === 0 || selectedCategories.has(itemCat);
+    const matchMode = viewMode === 'all' || (viewMode === 'tools' && isToolItem(i)) || (viewMode === 'other' && !isToolItem(i));
+    return ms&&matchCat&&matchMode&&(!tf||i.itemType===tf)&&(!vf||i.supplier===vf);
+  });
+  filtered.sort((a,b)=>{
+    let av=a[sortField]??'',bv=b[sortField]??'';
+    if(typeof av==='number'&&typeof bv==='number') return (av-bv)*sortDir;
+    return String(av).localeCompare(String(bv),undefined,{numeric:true})*sortDir;
+  });
+  document.getElementById('tableFooter').textContent=filtered.length!==items.length
+    ?`Showing ${filtered.length} of ${items.length} items`:`${items.length} items`;
+  const tbody=document.getElementById('itemsBody');
+  if(!filtered.length){
+    tbody.innerHTML=`<tr><td colspan="9"><div class="empty"><div class="empty-icon">◫</div><h3>No items match</h3></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML=filtered.map(item=>{
+    const inCart=cartItemIds.has(item.id);
+    const checked=selectedIds.has(item.id);
+    const rowColor = getItemColor(item);
+    return `<tr id="row-${item.id}" onclick="openEdit(${item.id})" class="${checked?'row-selected':''}">
+      <td style="padding:0;width:28px" class="color-col m-color">
+        <div style="width:19px;height:19px;border-radius:50%;background:${rowColor};margin:0 auto"></div>
+      </td>
+      <td class="m-check" style="padding:10px 8px 10px 10px" onclick="event.stopPropagation()">
+        <input type="checkbox" class="row-cb" data-id="${item.id}" ${checked?'checked':''} onchange="toggleRowSelect(${item.id},this)" style="cursor:pointer;accent-color:var(--accent);width:14px;height:14px">
+      </td>
+      <td class="m-title">
+        <div style="display:flex;align-items:center;gap:8px">
+          ${item.photo?`<img src="${esc(item.photo)}" class="thumb" loading="lazy" data-ph="${placeholderKey(item)}" onerror="imgBroke(this)">`:
+          placeholderIcon(item)}
+          <div class="desc">${esc(item.description)}</div>
+          ${item.physicalReorder ? '<span class="pickup-badge" title="Restock by a physical run (local pickup) — goes in the physical-reorder bin">🏃 Pickup</span>' : ''}
+          ${item.syncGroup ? '<span title="Linked item — syncs shared fields" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--accent);background:#e8eef8;border-radius:100px;padding:1px 6px;margin-left:4px;flex-shrink:0;font-family:var(--mono)">🔗</span>' : ''}
+        </div>
+      </td>
+      <td data-label="Part # / SKU"><span class="sku">${esc(item.sku||'—')}</span></td>
+      <td data-label="Vendor"><span class="supplier-cell">${esc(item.supplier||'—')}</span></td>
+
+      <td data-label="Location">${item.bin?`<span class="bin-tag" title="Location">${esc(item.bin)}</span>`:'<span style="color:var(--border);font-size:12px">—</span>'}</td>
+      <td data-label="Min stock"><span style="font-family:var(--mono);font-size:12px">${item.minStock||1}</span></td>
+      <td data-label="Reorder qty"><span style="font-family:var(--mono);font-size:12px">${item.reorderQty||1}</span></td>
+      <td data-label="Link" onclick="event.stopPropagation()" style="width:80px;max-width:80px;overflow:hidden">
+        ${item.url?`<a href="${esc(item.url)}" target="_blank" rel="noopener noreferrer" class="url-link" style="overflow:hidden;text-overflow:ellipsis;display:block;max-width:76px">${esc(urlShort(item.url))} ↗</a>`:`<span class="no-url">—</span>`}
+      </td>
+      <td class="m-actions" style="width:110px;min-width:110px;overflow:visible;padding-left:4px;position:sticky;right:0;background:var(--surface);z-index:1;box-shadow:-2px 0 4px rgba(0,0,0,.06)">
+        <div class="row-actions" onclick="event.stopPropagation()">
+          <button class="btn btn-cart btn-sm ${inCart?'in-cart':''}" onclick="toggleCart(${item.id},this)">
+            <svg width="11" height="11" fill="${inCart?'currentColor':'none'}" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+            ${inCart?'Queued':'Queue'}
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="openLabel(${item.id})" title="Print label">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();duplicateItem(${item.id})" title="Duplicate to new cell">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <button class="btn btn-danger btn-sm" onclick="deleteItem(${item.id})" title="Delete item">
+            <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function urlShort(url){try{return new URL(url).hostname.replace('www.','')}catch{return url.substring(0,18)}}
+
+// Category/type-matched placeholder icons, shown when an item has no photo — or when a
+// photo URL is dead (e.g. McMaster's expired ImageCache links). Line-art glyphs matching
+// the app's icon style; the row's color dot already conveys the category color.
+const PH_ICONS = {
+  mill:        '<path d="M9 3h6v9l-3 9-3-9z"/><path d="M9 7h6M9 11h6"/>',
+  drill:       '<path d="M10 3h4v9l-2 9-2-9z"/><path d="M10 6l4 2M10 9l4 2"/>',
+  tap:         '<rect x="8" y="2" width="8" height="4" rx="1"/><path d="M12 6v15"/><path d="M9 9h6M9 12h6M9 15h6"/>',
+  fastener:    '<path d="M9 3h6l-1 4h-4z"/><path d="M11 7v13M13 7v13"/><path d="M10 11h4M10 14h4M10 17h4"/>',
+  cup:         '<path d="M4 8h13v6a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M17 9h2a2 2 0 0 1 0 4h-2"/><path d="M7 3v2M10 3v2M13 3v2"/>',
+  flask:       '<path d="M9 3h6M10 3v6l-5 9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1l-5-9V3"/><path d="M7.5 15h9"/>',
+  clean:       '<path d="M9 8h5v11a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1z"/><path d="M9 8V5h3V3"/><path d="M9 5H6L4 7"/>',
+  metrology:   '<rect x="3" y="8" width="18" height="8" rx="1"/><path d="M7 8v3M11 8v4M15 8v3M19 8v4"/>',
+  wrench:      '<path d="M15 6a3.5 3.5 0 0 0-4.6 4.6l-6.4 6.4 2 2 6.4-6.4A3.5 3.5 0 0 0 18 8l-2.6 2.6-2-2z"/>',
+  electronics: '<path d="M9 2v6M15 2v6"/><path d="M7 8h10v3a5 5 0 0 1-10 0z"/><path d="M12 16v6"/>',
+  droplet:     '<path d="M12 3s6 7 6 11a6 6 0 0 1-12 0c0-4 6-11 6-11z"/>',
+  office:      '<path d="M6 3h9l3 3v15H6z"/><path d="M15 3v3h3"/><path d="M9 12h6M9 16h5"/>',
+  clamp:       '<path d="M3 6v12M21 6v12"/><rect x="5" y="9" width="5" height="6" rx="1"/><rect x="14" y="9" width="5" height="6" rx="1"/><path d="M10 12h4"/>',
+  spool:       '<rect x="5" y="5" width="14" height="14" rx="1"/><path d="M5 8h14M5 16h14"/><path d="M9 8v8M12 8v8M15 8v8"/>',
+  box:         '<path d="M12 3l8 4v10l-8 4-8-4V7z"/><path d="M4 7l8 4 8-4M12 11v10"/>'
+};
+// Pick an icon from the item's type + description (covers both tooling and the
+// typeless department items, whose descriptions name what they are).
+function placeholderKey(item){
+  const t = ((item.itemType||'')+' '+(item.description||'')).toLowerCase();
+  const rules = [
+    [/end ?mill|slot mill|face mill|form mill|radius mill|dovetail|chamfer|thread ?mill|threa?mill|\bmill\b|\bflute\b|bull ?nose|sphericut|high feed/, 'mill'],
+    [/\bdrill\b|\breamer\b|counterbore|countersink/, 'drill'],
+    [/\btap\b|\bthread\b/, 'tap'],
+    [/\bpla\b|petg|\babs\b|\btpu\b|filament|\bspool\b/, 'spool'],
+    [/jaw|\bvise\b|\bvice\b|collet|\bchuck\b|makro|workhold|clamp|soft jaw|top jaw/, 'clamp'],
+    [/screw|bolt|washer|\bnut\b|rivet|fastener|standoff|insert|dowel|\bpin\b|socket head|button head|flat head|pan head|hex head|cap screw|\bshcs\b|\bbhcs\b|\bfhcs\b|#\d{1,2}-\d{2}/, 'fastener'],
+    [/coffee|beverage|drink|snack|\bfood\b|\bwater\b|\bcup\b|creamer|sugar/, 'cup'],
+    [/chemical|coolant|kool ?mist|hangsterfer|\boil\b|lubric|adhesive|epoxy|grease|solvent|loctite|spray|acetone|mapp gas|cutting fluid|isopropyl|alcohol/, 'flask'],
+    [/clean|\bppe\b|glove|wipe|towel|safety|\bmask\b|sanit|scotch.?brite|abrasive/, 'clean'],
+    [/metrolog|gauge|\bgage\b|caliper|micrometer|indicator|\bmeasur|refractom/, 'metrology'],
+    [/wrench|plier|hammer|screwdriver|\bdriver\b|allen|hex key|hand tool/, 'wrench'],
+    [/network|cable|electronic|computer|\busb\b|adapter|\bplug\b|charger|ethernet/, 'electronics'],
+    [/plumb|pneumatic|valve|\bhose\b|fitting|\bbath|finishing|paint|faucet/, 'droplet'],
+    [/paper|\bpen\b|pencil|marker|\btape\b|label|office|folder|binder|staple|toner|laminat|pouch|business card|avery|\bclip\b|zip ?tie|index card/, 'office'],
+    // Tool-crib T-numbers (T30, T182…) are cutting tools; sweep any that dodged the
+    // specific tool rules above into the generic mill icon. Kept last so real matches win.
+    [/\bt\d{1,3}\b/, 'mill'],
+  ];
+  for (const [re, k] of rules) if (re.test(t)) return k;
+  return 'box';
+}
+function phTile(key){
+  return `<div class="thumb-ph" title="No photo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${PH_ICONS[key]||PH_ICONS.box}</svg></div>`;
+}
+function placeholderIcon(item){ return phTile(placeholderKey(item)); }
+function imgBroke(el){
+  const tpl = document.createElement('template');
+  tpl.innerHTML = phTile(el.getAttribute('data-ph') || 'box');
+  el.replaceWith(tpl.content.firstChild);
+}
+
+async function toggleCart(id,btn) {
+  if(cartItemIds.has(id)){
+    await fetch(`/api/cart/${id}`,{method:'DELETE'});
+    cartItemIds.delete(id);
+    btn.querySelector('svg').setAttribute('fill','none');
+    btn.childNodes[btn.childNodes.length-1].textContent=' Queue';
+    btn.classList.remove('in-cart');
+  } else {
+    await fetch('/api/cart',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({itemId:id})});
+    cartItemIds.add(id);
+    btn.querySelector('svg').setAttribute('fill','currentColor');
+    btn.childNodes[btn.childNodes.length-1].textContent=' Queued';
+    btn.classList.add('in-cart');
+  }
+  updateBadge(); renderStats();
+}
+
+// ── Scan Mode ─────────────────────────────────────────
+// USB barcode scanners work as keyboards — they type rapidly then send Enter.
+// We capture keystrokes into a buffer. If Enter arrives within 100ms of the
+// last keystroke, it's a scanner (not a human). Then we parse the item ID
+// from the URL (e.g. http://localhost:3000/reorder/42 → 42).
+
+function toggleScanMode() {
+  // On touch devices (phones/tablets) there's no USB scanner — use the camera instead.
+  if (isTouchDevice() && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    if (camStream) stopCameraScan(); else startCameraScan();
+    return;
+  }
+  scanMode = !scanMode;
+  const btn = document.getElementById('scanBtn');
+  const banner = document.getElementById('scanBanner');
+  const main = document.getElementById('mainContent');
+  btn.classList.toggle('active', scanMode);
+  banner.classList.toggle('active', scanMode);
+  main.classList.toggle('scan-active', scanMode);
+  if (scanMode) {
+    showFlash('Scan mode on — ready for scanner input', 'success');
+    // Focus body so keystrokes are captured
+    document.body.focus();
+  } else {
+    showFlash('Scan mode off');
+  }
+}
+
+document.addEventListener('keydown', e => {
+  // Don't intercept if scan mode is off or user is typing in an input
+  if (!scanMode) return;
+  const tag = document.activeElement.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+  if (e.key === 'Enter') {
+    if (scanBuffer.length > 0) {
+      processScan(scanBuffer.trim());
+      scanBuffer = '';
+    }
+    return;
+  }
+
+  // Accumulate printable characters
+  if (e.key.length === 1) {
+    scanBuffer += e.key;
+    clearTimeout(scanTimer);
+    // If no more chars arrive within 80ms, treat as complete scan
+    scanTimer = setTimeout(() => {
+      if (scanBuffer.length > 4) {
+        processScan(scanBuffer.trim());
+      }
+      scanBuffer = '';
+    }, 80);
+  }
+});
+
+async function processScan(raw) {
+  // Extract item ID from URL like http://host/reorder/42
+  let itemId = null;
+  const match = raw.match(/\/reorder\/(\d+)/);
+  if (match) {
+    itemId = parseInt(match[1]);
+  } else if (/^\d+$/.test(raw)) {
+    itemId = parseInt(raw);
+  }
+
+  if (!itemId) {
+    showFlash('Unrecognized scan: ' + raw.substring(0, 30), 'error');
+    return;
+  }
+
+  const item = items.find(i => i.id === itemId);
+  if (!item) {
+    showFlash('Item #' + itemId + ' not found', 'error');
+    return;
+  }
+
+  if (cartItemIds.has(itemId)) {
+    showFlash(item.description.substring(0,40) + ' — already in queue', '');
+    return;
+  }
+
+  await fetch('/api/cart', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({itemId, addedBy: 'scanner'})
+  });
+  cartItemIds.add(itemId);
+  updateBadge(); renderStats();
+
+  // Flash the row green
+  const row = document.getElementById('row-' + itemId);
+  if (row) {
+    row.classList.add('just-scanned');
+    setTimeout(() => row.classList.remove('just-scanned'), 2000);
+    row.scrollIntoView({behavior:'smooth', block:'center'});
+  }
+
+  showFlash('✓ ' + item.description.substring(0,40) + ' added to queue', 'success');
+}
+
+// ── Camera scanning (mobile) ──────────────────────────
+// Phones have no USB scanner, so decode QR codes from the camera. Uses the native
+// BarcodeDetector where available (Android/Chrome) and falls back to the vendored
+// jsQR (iOS/Safari). Decoded text is fed to the same processScan() as the USB path.
+let camStream = null, camRAF = null, camDetector = null;
+let camLastCode = '', camLastHit = 0;
+const camCanvas = document.createElement('canvas');
+
+function isTouchDevice() {
+  return window.matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+}
+
+function setCamStatus(msg, isErr) {
+  const el = document.getElementById('camStatus');
+  if (el) { el.textContent = msg; el.classList.toggle('err', !!isErr); }
+}
+
+function loadJsQR() {
+  return new Promise((resolve, reject) => {
+    if (window.jsQR) return resolve(window.jsQR);
+    const s = document.createElement('script');
+    s.src = '/vendor/jsqr.js';
+    s.onload = () => resolve(window.jsQR);
+    s.onerror = () => reject(new Error('decoder load failed'));
+    document.head.appendChild(s);
+  });
+}
+
+async function startCameraScan() {
+  const overlay = document.getElementById('camScan');
+  const video = document.getElementById('camVideo');
+  overlay.classList.add('open');
+  setCamStatus('Starting camera…');
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } }, audio: false
+    });
+  } catch (e) {
+    setCamStatus('Camera blocked — allow camera access in your browser, then tap Scan again.', true);
+    return;
+  }
+  video.srcObject = camStream;
+  try { await video.play(); } catch (e) {}
+  // Prefer the native detector; otherwise lazy-load jsQR.
+  camDetector = null;
+  if ('BarcodeDetector' in window) {
+    try { camDetector = new window.BarcodeDetector({ formats: ['qr_code'] }); } catch (e) { camDetector = null; }
+  }
+  if (!camDetector) {
+    try { await loadJsQR(); } catch (e) { setCamStatus('Could not load the QR decoder.', true); return; }
+  }
+  setCamStatus("Point at a card's QR code");
+  camRAF = requestAnimationFrame(camScanLoop);
+}
+
+async function camScanLoop() {
+  if (!camStream) return;
+  const video = document.getElementById('camVideo');
+  let raw = null;
+  try {
+    if (camDetector) {
+      const codes = await camDetector.detect(video);
+      if (codes && codes.length) raw = codes[0].rawValue;
+    } else if (window.jsQR && video.videoWidth) {
+      const w = video.videoWidth, h = video.videoHeight;
+      camCanvas.width = w; camCanvas.height = h;
+      const ctx = camCanvas.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(video, 0, 0, w, h);
+      const code = window.jsQR(ctx.getImageData(0, 0, w, h).data, w, h, { inversionAttempts: 'dontInvert' });
+      if (code) raw = code.data;
+    }
+  } catch (e) { /* transient decode error — keep scanning */ }
+
+  if (raw) {
+    const now = Date.now();
+    // Debounce: ignore the same code within 2.5s so one card isn't re-triggered repeatedly.
+    if (!(raw === camLastCode && now - camLastHit < 2500)) {
+      camLastCode = raw; camLastHit = now;
+      const box = document.getElementById('camReticle');
+      if (box) { box.classList.add('hit'); setTimeout(() => box.classList.remove('hit'), 400); }
+      if (navigator.vibrate) navigator.vibrate(60);
+      handleCameraHit(raw);
+      return; // pause the loop while the result sheet is shown
+    }
+  }
+  camRAF = requestAnimationFrame(camScanLoop);
+}
+
+let scannedItem = null;
+
+// A card was decoded: pause scanning and slide up the item's confirm sheet
+// (instead of silently adding it, like the USB-scanner path does).
+function handleCameraHit(raw) {
+  if (camRAF) { cancelAnimationFrame(camRAF); camRAF = null; }
+  let itemId = null;
+  const m = raw.match(/\/reorder\/(\d+)/);
+  if (m) itemId = parseInt(m[1]);
+  else if (/^\d+$/.test(raw)) itemId = parseInt(raw);
+  const item = itemId ? items.find(i => i.id === itemId) : null;
+  if (!item) {
+    setCamStatus(itemId ? ('Item #' + itemId + ' not found — keep scanning') : 'Not a kanban code', true);
+    camRAF = requestAnimationFrame(camScanLoop);   // resume; debounce suppresses repeats
+    return;
+  }
+  showScanSheet(item);
+}
+
+function showScanSheet(item) {
+  scannedItem = item;
+  const skuEl = document.getElementById('ssSku');
+  skuEl.textContent = item.sku || '';
+  skuEl.style.display = item.sku ? 'block' : 'none';
+  document.getElementById('ssDesc').textContent = item.description || '';
+  document.getElementById('ssVendor').textContent = item.supplier || '—';
+  document.getElementById('ssBin').textContent = item.bin || '—';
+  document.getElementById('ssQty').textContent = item.reorderQty || item.minStock || 1;
+  const msg = document.getElementById('ssMsg');
+  const addBtn = document.getElementById('ssAddBtn');
+  if (cartItemIds.has(item.id)) {
+    addBtn.style.display = 'none';
+    msg.style.display = 'block'; msg.className = 'ss-msg info'; msg.textContent = 'Already in the order queue';
+  } else {
+    addBtn.style.display = 'block'; addBtn.disabled = false; addBtn.textContent = 'Add to Order Queue';
+    msg.style.display = 'none';
+  }
+  document.getElementById('scanSheet').classList.add('open');
+}
+
+async function addScannedToCart() {
+  if (!scannedItem) return;
+  const id = scannedItem.id;
+  const addBtn = document.getElementById('ssAddBtn');
+  addBtn.disabled = true; addBtn.textContent = 'Adding…';
+  try {
+    await fetch('/api/cart', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ itemId: id, addedBy: 'scanner' }) });
+    cartItemIds.add(id);
+    updateBadge(); renderStats();
+    const row = document.getElementById('row-' + id);
+    if (row) { row.classList.add('just-scanned'); setTimeout(() => row.classList.remove('just-scanned'), 2000); }
+  } catch (e) {}
+  addBtn.style.display = 'none';
+  const msg = document.getElementById('ssMsg');
+  msg.style.display = 'block'; msg.className = 'ss-msg ok'; msg.textContent = '✓ Added to order queue';
+}
+
+function scanAnother() {
+  document.getElementById('scanSheet').classList.remove('open');
+  scannedItem = null;
+  setCamStatus("Point at a card's QR code");
+  if (camStream && !camRAF) camRAF = requestAnimationFrame(camScanLoop);
+}
+
+function stopCameraScan() {
+  if (camRAF) { cancelAnimationFrame(camRAF); camRAF = null; }
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  const video = document.getElementById('camVideo');
+  if (video) video.srcObject = null;
+  const overlay = document.getElementById('camScan');
+  if (overlay) overlay.classList.remove('open');
+  const sheet = document.getElementById('scanSheet');
+  if (sheet) sheet.classList.remove('open');
+  camDetector = null; camLastCode = ''; scannedItem = null;
+}
+
+// ── Flash toast ───────────────────────────────────────
+let flashTimer = null;
+function showFlash(msg, type='') {
+  const el = document.getElementById('flash');
+  el.textContent = msg;
+  el.className = 'flash' + (type ? ' '+type : '');
+  void el.offsetWidth; // reflow
+  el.classList.add('show');
+  clearTimeout(flashTimer);
+  flashTimer = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// ── Photo ─────────────────────────────────────────────
+function handlePhotoUrl(url) {
+  url = (url||'').trim();
+  if (!url) return;
+  const preview = document.getElementById('photoPreview');
+  preview.onerror = () => { preview.style.display='none'; currentPhotoData=null; };
+  preview.onload  = () => {
+    currentPhotoData = url;
+    preview.style.display='block';
+    document.getElementById('clearPhotoBtn').style.display='inline-flex';
+    document.querySelector('#photoUploadZone svg').style.display='none';
+    document.querySelector('#photoUploadZone div').style.display='none';
+  };
+  preview.src = url;
+}
+function handlePhoto(input) {
+  const file=input.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    currentPhotoData=e.target.result;
+    const preview=document.getElementById('photoPreview');
+    preview.src=currentPhotoData; preview.style.display='block';
+    document.getElementById('clearPhotoBtn').style.display='inline-flex';
+    document.querySelector('#photoUploadZone svg').style.display='none';
+    document.querySelector('#photoUploadZone div').style.display='none';
+  };
+  reader.readAsDataURL(file);
+}
+function clearPhoto() {
+  currentPhotoData=null;
+  document.getElementById('fPhoto').value='';
+  document.getElementById('fPhotoUrl').value='';
+  document.getElementById('photoPreview').style.display='none';
+  document.getElementById('photoPreview').src='';
+  document.getElementById('clearPhotoBtn').style.display='none';
+  document.querySelector('#photoUploadZone svg').style.display='';
+  document.querySelector('#photoUploadZone div').style.display='';
+}
+
+// ── Modal CRUD ────────────────────────────────────────
+// ── Custom category dropdown ──────────────────────────────
+function buildCategorySelect(_, currentColor) {
+  // _ is ignored — we use the custom dropdown now
+  setCategoryValue(currentColor || '');
+  renderCatDropList();
+}
+
+function renderCatDropList() {
+  const list = document.getElementById('catDropList');
+  if (!list) return;
+  const current = document.getElementById('fCategory').value;
+  const entries = Object.entries(cats).sort((a,b) => a[1].label.localeCompare(b[1].label));
+  list.innerHTML = entries.map(([cellColor, cell]) => {
+    const subs = cell.subtypes || {};
+    const isTool = (cell.label||'').toLowerCase().includes('tool');
+    const hasSubs = isTool && Object.keys(subs).length > 0;
+    // Is current selection this cell or one of its subtypes?
+    const cellSelected = current === cellColor;
+    const subSelected = hasSubs && subs[current] !== undefined;
+    const isActive = cellSelected || subSelected;
+    let html = '';
+    if (hasSubs) {
+      // Cell header (not selectable itself — select via subtypes)
+      html += '<div style="padding:6px 12px 3px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:6px">' +
+        '<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:' + cellColor + ';flex-shrink:0;border:1px solid rgba(0,0,0,.1)"></span>' +
+        esc(cell.label) + '</div>';
+      // Subtypes indented
+      html += Object.entries(subs).sort((a,b)=>a[1].localeCompare(b[1])).map(([sc, sl]) => {
+        const isActive = sc === current;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.setAttribute('data-catcolor', sc);
+        btn.setAttribute('onclick', 'setCategoryValue(this.dataset.catcolor)');
+        btn.style.cssText = 'width:calc(100% - 8px);padding:7px 12px 7px 28px;background:' + (isActive?'var(--border-light)':'none') + ';border:none;color:var(--text);font-size:12px;font-family:var(--sans);cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;border-radius:4px;margin:1px 4px';
+        btn.innerHTML = '<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:' + sc + ';flex-shrink:0;border:1px solid rgba(0,0,0,.08)"></span>' +
+          '<span style="font-weight:' + (isActive?'600':'400') + '">' + esc(sl) + '</span>' +
+          (isActive ? '<svg style="margin-left:auto" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : '');
+        return btn.outerHTML;
+      }).join('');
+    } else {
+      // Regular cell — selectable directly
+      const cellBtn = document.createElement('button');
+      cellBtn.type = 'button';
+      cellBtn.setAttribute('data-catcolor', cellColor);
+      cellBtn.setAttribute('onclick', 'setCategoryValue(this.dataset.catcolor)');
+      cellBtn.style.cssText = 'width:calc(100% - 8px);padding:8px 12px;background:' + (cellSelected?'var(--border-light)':'none') + ';border:none;color:var(--text);font-size:13px;font-family:var(--sans);cursor:pointer;text-align:left;display:flex;align-items:center;gap:10px;border-radius:4px;margin:2px 4px';
+      cellBtn.innerHTML = '<span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:' + cellColor + ';flex-shrink:0;border:1px solid rgba(0,0,0,.08)"></span>' +
+        '<span style="font-weight:' + (cellSelected?'600':'400') + '">' + esc(cell.label) + '</span>' +
+        (cellSelected ? '<svg style="margin-left:auto" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : '');
+      html += cellBtn.outerHTML; //
+
+    }
+    return html;
+  }).join('<div style="height:1px;background:var(--border-light);margin:3px 8px"></div>');
+}
+
+function setCategoryValue(color) {
+  document.getElementById('fCategory').value = color;
+  const dot = document.getElementById('catDropDot');
+  const btn = document.getElementById('catDropBtn');
+  const label = document.getElementById('catDropLabel');
+  const panel = document.getElementById('catDropPanel');
+  if (!dot || !btn || !label) return;
+  // Resolve label — could be a cell or a subtype
+  let resolvedLabel = '';
+  let resolvedColor = color;
+  if (color && cats[color]) {
+    resolvedLabel = cats[color].label;
+  } else if (color) {
+    // Check if it's a subtype
+    for (const [cellColor, cell] of Object.entries(cats)) {
+      if (cell.subtypes && cell.subtypes[color] !== undefined) {
+        resolvedLabel = cats[cellColor].label + ' / ' + cell.subtypes[color];
+        break;
+      }
+    }
+  }
+  if (resolvedLabel) {
+    dot.style.background = color;
+    btn.style.borderLeftColor = color;
+    label.style.color = 'var(--text)';
+    label.textContent = resolvedLabel;
+  } else {
+    dot.style.background = '#ccc';
+    btn.style.borderLeftColor = 'var(--border)';
+    label.style.color = 'var(--muted)';
+    label.textContent = '— select category / cell —';
+  }
+  if (panel) panel.style.display = 'none';
+  renderCatDropList();
+  // Rebuild bin field for new cell's locations
+  buildBinField(color, document.getElementById('fBin') ? document.getElementById('fBin').value : '');
+}
+
+function toggleCatDrop() {
+  const panel = document.getElementById('catDropPanel');
+  if (!panel) return;
+  if (panel.style.display === 'none') {
+    renderCatDropList();
+    panel.style.display = 'block';
+    // Close on outside click
+    setTimeout(() => {
+      document.addEventListener('click', closeCatDropOutside);
+    }, 0);
+  } else {
+    panel.style.display = 'none';
+  }
+}
+
+function closeCatDropOutside(e) {
+  const wrap = document.getElementById('catDropWrap');
+  if (wrap && !wrap.contains(e.target)) {
+    const panel = document.getElementById('catDropPanel');
+    if (panel) panel.style.display = 'none';
+    document.removeEventListener('click', closeCatDropOutside);
+  }
+}
+
+function openInlineCatCreate() {
+  document.getElementById('catDropPanel').style.display = 'none';
+  document.removeEventListener('click', closeCatDropOutside);
+  document.getElementById('inlineCatCreate').style.display = 'block';
+  setTimeout(() => document.getElementById('newCatName').focus(), 50);
+}
+
+function cancelInlineCat() {
+  document.getElementById('inlineCatCreate').style.display = 'none';
+  document.getElementById('newCatName').value = '';
+}
+
+async function saveInlineCat() {
+  const name = document.getElementById('newCatName').value.trim();
+  let color = document.getElementById('newCatColor').value;
+  if (!name) { document.getElementById('newCatName').focus(); return; }
+  // If this exact color is taken, slightly adjust it to make it unique
+  if (cats[color]) {
+    const hex = parseInt(color.slice(1), 16);
+    color = '#' + ((hex + 0x010101) & 0xFFFFFF).toString(16).padStart(6,'0');
+  }
+  cats[color] = { label: name, description: '' };
+  await fetch('/api/categories', {
+    method: 'PUT', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify(cats)
+  });
+  // Also reload cats from server to ensure sync
+  const fresh = await fetch('/api/categories').then(r=>r.json());
+  Object.assign(cats, fresh);
+  cancelInlineCat();
+  populateFilters();
+  setCategoryValue(color);
+}
+
+function onDescInput(val) {
+  // Auto-suggest category if not set
+  const catVal = document.getElementById('fCategory').value;
+  if (!catVal) {
+    const detected = detectItemType(val);
+    if (detected) {
+      const color = typeColors[detected];
+      if (color && cats[color]) setCategoryValue(color);
+    }
+  }
+}
+
+function openAdd() {
+  document.getElementById('modalTitle').textContent='Add Item';
+  document.getElementById('editId').value='';
+  ['fDesc','fSku','fSupplier','fUrl','fMinUnit','fReorderUnit','fPrice'].forEach(id=>document.getElementById(id).value='');
+  buildBinField('', '');
+  document.getElementById('fMinStock').value='1';
+  document.getElementById('fReorderQty').value='1';
+  document.getElementById('fPhysicalReorder').checked=false;
+  buildCategorySelect(null, '');
+  cancelInlineCat();
+  clearPhoto();
+  populateTypeDatalist();
+  document.getElementById('urlImportRow').style.display='block';
+  document.getElementById('modalImportStatus').textContent='';
+  currentSyncGroup = null;
+  renderSyncSection(null);
+  document.getElementById('itemModal').classList.add('open');
+  setTimeout(()=>document.getElementById('fDesc').focus(),50);
+}
+function openEdit(id) {
+  document.getElementById('urlImportRow').style.display='none';
+  const item=items.find(i=>i.id===id); if(!item) return;
+  document.getElementById('modalTitle').textContent='Edit Item';
+  document.getElementById('editId').value=id;
+  document.getElementById('fDesc').value=item.description||'';
+  document.getElementById('fSku').value=item.sku||'';
+  document.getElementById('fSupplier').value=item.supplier||'';
+  buildCategorySelect(document.getElementById('fCategory'), item.category||'');
+  buildBinField(item.category||'', item.bin||'');
+  document.getElementById('fMinStock').value=item.minStock||1;
+  document.getElementById('fMinUnit').value=item.minUnit||'';
+  document.getElementById('fReorderQty').value=item.reorderQty||item.minStock||1;
+  document.getElementById('fReorderUnit').value=item.reorderUnit||'';
+  document.getElementById('fPrice').value=item.price||'';
+  document.getElementById('fUrl').value=item.url||'';
+  document.getElementById('fPhysicalReorder').checked=!!item.physicalReorder;
+  clearPhoto();
+  if(item.photo){
+    currentPhotoData=item.photo;
+    const preview=document.getElementById('photoPreview');
+    preview.src=item.photo; preview.style.display='block';
+    document.getElementById('clearPhotoBtn').style.display='inline-flex';
+    document.querySelector('#photoUploadZone svg').style.display='none';
+    document.querySelector('#photoUploadZone div').style.display='none';
+    if(item.photo.startsWith('http'))
+      document.getElementById('fPhotoUrl').value=item.photo;
+  }
+  currentSyncGroup = item.syncGroup || null;
+  renderSyncSection(item);
+  document.getElementById('itemModal').classList.add('open');
+}
+function closeModal(){
+  document.getElementById('itemModal').classList.remove('open');
+  cancelInlineCat();
+  const panel = document.getElementById('catDropPanel');
+  if (panel) panel.style.display = 'none';
+  document.removeEventListener('click', closeCatDropOutside);
+}
+
+async function saveItem() {
+  const id=document.getElementById('editId').value;
+  const payload={
+    description:document.getElementById('fDesc').value.trim(),
+    sku:document.getElementById('fSku').value.trim(),
+    supplier:document.getElementById('fSupplier').value.trim(),
+    itemType:'',
+    category:document.getElementById('fCategory').value,
+    bin:document.getElementById('fBin').value.trim(),
+    minStock:parseInt(document.getElementById('fMinStock').value)||1,
+    minUnit:document.getElementById('fMinUnit').value.trim(),
+    reorderQty:parseInt(document.getElementById('fReorderQty').value)||1,
+    reorderUnit:document.getElementById('fReorderUnit').value.trim(),
+    price:parseFloat(document.getElementById('fPrice').value)||0,
+    url:document.getElementById('fUrl').value.trim(),
+    photo:currentPhotoData||null,
+    physicalReorder:document.getElementById('fPhysicalReorder').checked,
+  };
+  if(!payload.description){alert('Description is required.');return;}
+  if(id){
+    const res=await fetch(`/api/items/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const result=await res.json();
+    const updated = result.item || result;
+    const idx=items.findIndex(i=>i.id===parseInt(id));
+    if(idx!==-1) items[idx]=updated;
+    // If siblings were synced, reload all items to reflect their updated fields
+    if(result.syncedCount>0){
+      const ir=await fetch('/api/items');
+      items=await ir.json();
+      closeModal(); renderItems(); renderStats();
+      showFlash(`Saved + synced to ${result.syncedCount} linked item${result.syncedCount!==1?'s':''}`, 'success');
+      return;
+    }
+  } else {
+    const res=await fetch('/api/items',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    items.push(await res.json());
+    populateFilters();
+  }
+  closeModal(); renderItems(); renderStats();
+}
+
+
+// ── Sync group UI ─────────────────────────────────────────────────────────────
+// Linking only happens via Duplicate. This section shows siblings and allows unlinking.
+
+function renderSyncSection(item) {
+  const body = document.getElementById('syncBody');
+  if (!body) return;
+  const editId = document.getElementById('editId').value;
+  const currentId = editId ? parseInt(editId) : null;
+  currentSyncGroup = item ? (item.syncGroup || null) : null;
+
+  if (!currentSyncGroup) {
+    body.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:4px 0">' +
+      'Not linked. Use <strong>Duplicate</strong> on any item to create a linked copy for another cell. ' +
+      'Changes to shared fields (description, SKU, vendor, URL, photo, price) sync to all copies on save.' +
+      '</div>';
+    return;
+  }
+
+  const siblings = items.filter(i => i.syncGroup === currentSyncGroup && i.id !== currentId);
+  const sibHtml = siblings.length === 0
+    ? '<div style="color:var(--muted);font-size:12px;padding:4px 0 6px">No other copies in this group yet.</div>'
+    : siblings.map(sib => {
+        const catLabel = (cats[sib.category] && cats[sib.category].label) || '—';
+        const loc = sib.bin || '—';
+        return '<div style="display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--bg);border-radius:var(--radius);margin-bottom:5px;border:1px solid var(--border-light)">' +
+          '<div style="width:10px;height:10px;border-radius:50%;background:' + (sib.category||'#ccc') + ';flex-shrink:0"></div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:12px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(sib.description) + '</div>' +
+            '<div style="font-size:11px;color:var(--muted)">' + esc(catLabel) + ' · ' + esc(loc) + '</div>' +
+          '</div>' +
+          '<button type="button" onclick="unlinkItem(' + sib.id + ')" ' +
+            'style="padding:3px 8px;background:none;border:1px solid var(--border);border-radius:4px;font-size:11px;color:var(--muted);cursor:pointer;flex-shrink:0;font-family:var(--sans)" ' +
+            'title="Remove this copy from the sync group">Unlink</button>' +
+        '</div>';
+      }).join('');
+
+  body.innerHTML =
+    '<div style="margin-bottom:8px">' + sibHtml + '</div>' +
+    '<button type="button" onclick="unlinkSelf()" ' +
+      'style="padding:5px 12px;background:none;border:1px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--muted);cursor:pointer;font-family:var(--sans)">' +
+      'Leave group' +
+    '</button>';
+}
+
+async function unlinkItem(itemId) {
+  const res = await fetch('/api/items/sync-unlink', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ itemId })
+  });
+  if (!res.ok) { alert('Unlink failed'); return; }
+  const { updated } = await res.json();
+  updated.forEach(upd => {
+    const idx = items.findIndex(i => i.id === upd.id);
+    if (idx !== -1) items[idx] = upd;
+  });
+  const currentId = parseInt(document.getElementById('editId').value);
+  const currentItem = items.find(i => i.id === currentId);
+  currentSyncGroup = currentItem ? (currentItem.syncGroup || null) : null;
+  renderSyncSection(currentItem);
+  renderItems();
+  showFlash('Unlinked', 'info');
+}
+
+async function unlinkSelf() {
+  const currentId = parseInt(document.getElementById('editId').value);
+  if (!currentId) return;
+  await unlinkItem(currentId);
+}
+
+async function deleteItem(id) {
+  if(!confirm('Delete this item?')) return;
+  await fetch(`/api/items/${id}`,{method:'DELETE'});
+  items=items.filter(i=>i.id!==id);
+  cartItemIds.delete(id);
+  populateFilters(); renderItems(); renderStats(); updateBadge();
+}
+
+async function duplicateItem(id) {
+  const res = await fetch(`/api/items/${id}/duplicate`, { method: 'POST' });
+  if (!res.ok) { alert('Duplicate failed'); return; }
+  const { item: newItem, sourceUpdated } = await res.json();
+  // Update source item in local array (it may have gotten a syncGroup assigned)
+  if (sourceUpdated) {
+    const srcIdx = items.findIndex(i => i.id === sourceUpdated.id);
+    if (srcIdx !== -1) items[srcIdx] = sourceUpdated;
+  }
+  items.push(newItem);
+  populateFilters(); renderItems(); renderStats();
+  // Open edit modal after click events fully resolve
+  setTimeout(() => openEdit(newItem.id), 0);
+  showFlash('Duplicated — set the Category/Cell and Location for this copy', 'info');
+}
+
+// ── Labels ────────────────────────────────────────────
+async function openLabel(id) {
+  labelItem=items.find(i=>i.id===id); if(!labelItem) return;
+  document.getElementById('labelModal').classList.add('open');
+  await renderLabel();
+}
+function closeLabelModal(){document.getElementById('labelModal').classList.remove('open');}
+function setSize(size,el){
+  labelSize=size;
+  document.querySelectorAll('.size-opt').forEach(e=>e.classList.remove('active'));
+  el.classList.add('active');
+  renderLabel();
+}
+async function renderLabel(){
+  if(!labelItem) return;
+  const {qr}=await fetch(`/api/items/${labelItem.id}/qr`).then(r=>r.json());
+  document.getElementById('labelPreview').innerHTML=pickupWrap(labelItem,buildLabel(labelItem,qr,labelSize));
+}
+
+// Overlay a "PICKUP" corner flag on a finished label for physical-run (local
+// pickup) items, so whoever pulls the printed card drops it in the physical-
+// reorder bin. Wraps the rendered HTML; absolute overlay keeps card size exact.
+function pickupWrap(item, html) {
+  if (!item || !item.physicalReorder) return html;
+  const flag = '<div style="position:absolute;top:0;right:0;background:#b26a00;color:#fff;' +
+    "font:800 8px/1.2 'IBM Plex Sans',sans-serif;letter-spacing:.06em;padding:3px 7px;" +
+    'border-bottom-left-radius:6px;z-index:5;white-space:nowrap">🏃 PICKUP</div>';
+  // Inject the flag INTO the card's own root element (making it the positioning
+  // context) instead of wrapping the card. A wrapper element changed how the card
+  // sat in the print/preview layout AND its line-height:0 collapsed card text that
+  // didn't set its own line-height (the header label, vendor value). Injecting into
+  // the existing root keeps one root in / one root out — a flagged card lays out
+  // identically to a plain one.
+  const start = html.indexOf('<div');
+  const tagEnd = start < 0 ? -1 : html.indexOf('>', start);
+  if (tagEnd < 0) return html;
+  const openTag = html.slice(start, tagEnd + 1);
+  const withPos = /style\s*=\s*"/.test(openTag)
+    ? openTag.replace(/style\s*=\s*"/, 'style="position:relative;')
+    : openTag.replace('<div', '<div style="position:relative"');
+  return html.slice(0, start) + withPos + flag + html.slice(tagEnd + 1);
+}
+
+// Shared label builder
+function buildLabel(item, qr, size) {
+  // Load card config for this size (falls back to defaults)
+  const saved = JSON.parse(localStorage.getItem('kanban_card_configs')||'{}');
+  const DEFAULTS_LOCAL = {
+    xs:{showDescription:true,showSku:true,showPhoto:true,showQr:true,showCellLocation:true,cellLocationFontSize:7,descFontSize:8,skuFontSize:7,qrSize:52},
+    sm:{showToolNum:true,showSku:true,showDescription:true,showVendor:false,showBin:false,showQr:true,headerBg:'#1a1916',toolNumFontSize:24,descFontSize:8,skuFontSize:7,vendorFontSize:6,dividerWeight:2,qrSize:62,leftColWidth:54},
+    md:{showHeader:true,showCellLabel:true,showToolNum:true,showSku:true,showDescription:true,showVendor:true,showReorderQty:true,showQr:true,showPhoto:true,headerBg:'#1a1916',cellLabelFontSize:9,locationFontSize:12,toolNumFontSize:10,skuFontSize:9,descFontSize:14,vendorFontSize:8,qtyFontSize:14,qtyLabelSize:6,qtyBorderWeight:1.5,qrSize:72,headerHeight:26},
+    lg:{showHeader:true,showCellLabel:true,showToolNum:true,showSku:true,showDescription:true,showVendor:true,showReorderQty:true,showPhoto:true,showQr:true,headerBg:'#1a1916',cellLabelFontSize:11,locationFontSize:15,toolNumFontSize:13,descFontSize:18,skuFontSize:12,vendorFontSize:10,qtyFontSize:16,qtyLabelSize:7,qtyBorderWeight:1.5,qrSize:112,headerHeight:32,padding:14},
+    full:{showHeader:true,showCellLabel:true,showToolNum:true,showSku:true,showDescription:true,showVendorBox:true,showLocationBox:true,showReorderQtyBox:true,showPhoto:true,showQr:true,headerBg:'#1a1916',cellLabelFontSize:14,locationFontSize:13,toolNumFontSize:11,descFontSize:18,skuFontSize:11,infoFontSize:11,locationBoxFontSize:13,qtyFontSize:20,qtyLabelSize:7,qrSize:140,headerHeight:36,padding:14,photoHeight:110},
+    ship:{showHeader:true,showCellLabel:true,showToolNum:true,showDescription:true,showSku:true,showVendor:true,showLocation:true,showReorderQty:true,showQr:true,showPhoto:true,descFontSize:34,skuFontSize:14,locationFontSize:26,qtyFontSize:34,qtyLabelSize:10,qrSize:150,headerHeight:46,padding:18}
+  };
+  const c = Object.assign({}, DEFAULTS_LOCAL[size]||{}, saved[size]||{});
+  const shopName = ((settings.shopName||'YOUR SHOP')).toUpperCase();
+  const _s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  const shopLogo = _s.shopLogo || null;
+
+  const tMatch = item.description && item.description.match(/^(T\d+)\s*[-–]?\s*/i);
+  const toolNum = tMatch ? tMatch[1].toUpperCase() : null;
+  const descRest = tMatch ? item.description.slice(tMatch[0].length) : item.description;
+
+  // Category / Cell label
+  const catLabel = (cats && item.category && cats[item.category]) ? cats[item.category].label : '';
+
+  // Category field directly sets header color; fallback to card editor default
+  const typeColor = item.category || null;
+  const hbg = (size !== 'sm' && typeColor) ? typeColor : (c.headerBg || '#1a1916');
+  function isLight(hex) {
+    try { const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16); return (r*299+g*587+b*114)/1000>128; } catch { return false; }
+  }
+  const fontFamilies = {'mono':"'IBM Plex Mono',monospace",'sans':"'IBM Plex Sans',sans-serif",'serif':"Georgia,serif"};
+  const hdrFont = fontFamilies[c.headerFontFamily||'mono'] || fontFamilies['mono'];
+  const hdrFontSize = c.headerFontSize;
+  const hdrFontWeight = c.headerFontWeight || 500;
+  const htext = isLight(hbg) ? '#1a1916' : '#ffffff';
+  const hTextMuted = isLight(hbg) ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.5)';
+
+  // ── SHIP — Shipping Label 4"×6" (384×576px) — BLACK & WHITE, for the shipping-label
+  //    printer; a high-contrast sticker for labeling larger items. Ignores category color. ──
+  if (size==='ship') {
+    const qs = c.qrSize || 150;
+    const pad = c.padding || 18;
+    return `
+    <div style="width:384px;height:576px;background:#fff;color:#000;border:3px solid #000;font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column;overflow:hidden">
+      ${c.showHeader!==false?`
+      <div style="background:#000;color:#fff;height:${c.headerHeight||46}px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 ${pad}px;gap:10px;overflow:hidden">
+        ${shopLogo?`<img src="${esc(shopLogo)}" style="max-height:${(c.headerHeight||46)-14}px;max-width:150px;object-fit:contain;filter:brightness(0) invert(1)" onerror="this.style.display='none'">`
+          :`<span style="font-size:13px;font-weight:700;letter-spacing:.14em">${esc(shopName)}</span>`}
+        <span style="font-size:10px;font-weight:600;letter-spacing:.18em;opacity:.85">SHIPPING LABEL</span>
+      </div>`:''}
+      ${c.showCellLabel!==false&&catLabel?`
+      <div style="border-bottom:2px solid #000;padding:5px ${pad}px;flex-shrink:0">
+        <span style="font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase">${esc(catLabel)}</span>
+      </div>`:''}
+      <div style="padding:${pad}px ${pad}px 10px;flex-shrink:0">
+        ${c.showToolNum!==false&&toolNum?`<div style="font-size:16px;font-weight:700;letter-spacing:.08em;margin-bottom:4px">${esc(toolNum)}</div>`:''}
+        ${c.showDescription!==false?`<div style="font-size:${c.descFontSize||34}px;font-weight:800;font-family:'IBM Plex Sans',sans-serif;line-height:1.08;letter-spacing:-.01em;word-break:break-word;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden">${esc(descRest||item.description)}</div>`:''}
+        ${(c.showSku!==false&&item.sku)||(c.showVendor!==false&&item.supplier)?`<div style="font-size:${c.skuFontSize||14}px;font-weight:600;margin-top:8px;letter-spacing:.03em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc([item.supplier,item.sku].filter(Boolean).join('   ·   '))}</div>`:''}
+      </div>
+      ${c.showLocation!==false&&item.bin?`
+      <div style="margin:0 ${pad}px;border:2px solid #000;display:flex;align-items:stretch;flex-shrink:0">
+        <div style="background:#000;color:#fff;display:flex;align-items:center;padding:0 11px;font-size:9px;font-weight:700;letter-spacing:.12em">LOCATION</div>
+        <div style="flex:1;display:flex;align-items:center;padding:6px 12px;font-size:${c.locationFontSize||26}px;font-weight:800;letter-spacing:.01em;line-height:1.05;word-break:break-word;overflow:hidden">${esc(item.bin)}</div>
+      </div>`:''}
+      ${c.showReorderQty!==false?`
+      <div style="display:flex;gap:10px;margin:12px ${pad}px 0;flex-shrink:0">
+        <div style="flex:1;border:2px solid #000;padding:8px 6px;text-align:center">
+          <div style="font-size:${c.qtyLabelSize||10}px;font-weight:700;letter-spacing:.12em;margin-bottom:3px">MIN STOCK</div>
+          <div style="font-size:${c.qtyFontSize||34}px;font-weight:800;line-height:1">${item.minStock||1}${item.minUnit?`<span style="font-size:14px;font-weight:600;margin-left:3px">${esc(item.minUnit)}</span>`:''}</div>
+        </div>
+        <div style="flex:1;border:2px solid #000;padding:8px 6px;text-align:center">
+          <div style="font-size:${c.qtyLabelSize||10}px;font-weight:700;letter-spacing:.12em;margin-bottom:3px">REORDER QTY</div>
+          <div style="font-size:${c.qtyFontSize||34}px;font-weight:800;line-height:1">${item.reorderQty||1}${item.reorderUnit?`<span style="font-size:14px;font-weight:600;margin-left:3px">${esc(item.reorderUnit)}</span>`:''}</div>
+        </div>
+      </div>`:''}
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:16px;padding:14px ${pad}px;min-height:0;overflow:hidden">
+        ${c.showPhoto!==false&&item.photo?`<img src="${esc(item.photo)}" style="width:118px;height:118px;object-fit:contain;filter:grayscale(1) contrast(1.15);flex-shrink:0">`:''}
+        ${c.showQr!==false?`
+        <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+          <img src="${qr}" style="width:${qs}px;height:${qs}px;border:3px solid #000;padding:5px;display:block">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.1em;margin-top:7px">SCAN TO REORDER</div>
+        </div>`:''}
+      </div>
+    </div>`;
+  }
+
+  // ── XS — Bin Label 1.5"×1" (144×96px) ───────────────────────────────────────
+  if (size==='xs') {
+    const qs = c.qrSize || 52;
+    const photoH = qs;
+    const clfs = c.cellLocationFontSize || 7;
+    const stripH = clfs + 7;
+    return `
+    <div style="width:144px;height:96px;background:#fff;border:1.5px solid #1a1916;font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column;overflow:hidden">
+      ${c.showCellLocation!==false&&(catLabel||item.bin)?`
+      <div style="background:${hbg};height:${stripH}px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 5px;gap:3px;overflow:hidden">
+        <span style="font-size:${clfs}px;color:${htext};font-weight:700;letter-spacing:.05em;font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${esc(catLabel||'')}</span>
+        ${item.bin?`<span style="font-size:${clfs}px;color:${htext};font-weight:700;letter-spacing:.04em;font-family:'IBM Plex Mono',monospace;flex-shrink:0;background:rgba(255,255,255,.18);padding:0 4px;border-radius:2px">${esc(item.bin)}</span>`:''}
+      </div>`:''}
+      <div style="flex:1;padding:3px 6px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;min-height:0">
+        ${c.showDescription!==false?`<div style="font-size:${c.descFontSize||8}px;font-weight:700;color:#000;line-height:1.2;font-family:'IBM Plex Sans',sans-serif;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${esc(toolNum?descRest:item.description)}</div>`:''}
+        ${c.showSku!==false&&item.sku?`<div style="font-size:${c.skuFontSize||7}px;font-weight:600;color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${esc(item.sku)}</div>`:''}
+      </div>
+      <div style="border-top:1px solid #1a1916;display:flex;align-items:stretch;flex-shrink:0;height:${qs+8}px">
+        ${c.showPhoto!==false&&item.photo?`
+        <div style="flex:1;border-right:1px solid #e8e5df;display:flex;align-items:center;justify-content:center;padding:3px;overflow:hidden">
+          <img src="${esc(item.photo)}" style="max-width:100%;max-height:${photoH}px;object-fit:contain">
+        </div>`:''}
+        ${c.showQr!==false?`
+        <div style="width:${qs+8}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:3px">
+          <img src="${qr}" style="width:${qs}px;height:${qs}px;display:block">
+        </div>`:''}
+      </div>
+    </div>`;
+  }
+
+  // ── SM — Tool Card 1.75"×0.75" (168×72px) — LOCKED, DO NOT CHANGE ───────────
+  if (size==='sm') {
+    const lfs = c.toolNumFontSize || 28;
+    const divW = c.dividerWeight || 2;
+    const qrImgW = c.qrSize || 62;
+    const qrColW = qrImgW + 8;
+    return `
+    <div class="label-sm-print" style="width:168px;height:72px;background:#fff;display:flex;align-items:stretch;font-family:'IBM Plex Mono',monospace;overflow:hidden">
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;padding:4px 5px;gap:2px;overflow:hidden">
+        ${c.showToolNum!==false&&toolNum?`
+        <div style="font-size:${lfs}px;font-weight:700;color:#000;line-height:1;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(toolNum)}</div>`:''}
+        ${c.showDescription!==false?`
+        <div style="font-size:${c.descFontSize||9}px;font-weight:600;color:#000;line-height:1.25;font-family:'IBM Plex Sans',sans-serif;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${esc(toolNum?descRest:item.description)}</div>`:''}
+        ${c.showSku!==false&&item.sku?`
+        <div style="font-size:8px;color:#000;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${esc(item.sku)}</div>`:''}
+        ${c.showVendor!==false&&item.supplier?`
+        <div style="font-size:7px;color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${esc(item.supplier)}${c.showBin!==false&&item.bin?' · '+esc(item.bin):''}</div>`:''}
+      </div>
+      ${c.showQr!==false?`
+      <div style="width:${qrColW}px;flex-shrink:0;border-left:${divW}px solid #000;display:flex;align-items:center;justify-content:flex-start;padding:4px 4px 4px 3px">
+        <img src="${qr}" style="width:${qrImgW}px;height:${qrImgW}px;display:block">
+      </div>`:''}
+    </div>`;
+  }
+
+  // ── MD — Medium 3"×2" (288×192px) ────────────────────────────────────────────
+  if (size==='md') {
+    const qs = c.qrSize || 72;
+    const clfs = c.cellLabelFontSize || 9;
+    const lfs = c.locationFontSize || 12;
+    return `
+    <div style="width:288px;height:192px;background:#fff;border:2px solid #1a1916;font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column;overflow:hidden">
+      ${c.showHeader!==false?`
+      <div style="background:${hbg};padding:0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;height:${c.headerHeight||26}px;overflow:hidden">
+        ${shopLogo
+          ?`<img src="${shopLogo}" style="max-height:${(c.headerHeight||26)-6}px;max-width:80px;object-fit:contain;filter:${isLight(hbg)?'none':'brightness(0) invert(1)'}" onerror="this.style.display='none'">`
+          :(c.showCellLabel!==false&&catLabel
+            ?`<span style="font-size:${clfs}px;color:${htext};font-weight:700;letter-spacing:.06em;font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${esc(catLabel)}</span>`
+            :`<span style="font-size:${hdrFontSize||8}px;color:${hTextMuted};letter-spacing:.1em;font-family:${hdrFont};font-weight:${hdrFontWeight}">${shopName}</span>`)}
+        ${item.bin?`<span style="font-size:${lfs}px;color:${htext};font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:.04em;background:rgba(255,255,255,.18);padding:1px 8px;border-radius:3px;flex-shrink:0">${esc(item.bin)}</span>`:''}
+      </div>`:''}
+      <div style="flex:1;display:flex;overflow:hidden">
+        ${item.photo&&c.showPhoto!==false?`
+        <div style="width:108px;flex-shrink:0;border-right:1px solid #e8e5df;display:flex;align-items:center;justify-content:center;padding:6px;background:#fafafa">
+          <img src="${esc(item.photo)}" style="max-width:96px;max-height:100%;object-fit:contain">
+        </div>`:''}
+        <div style="flex:1;padding:8px 10px;display:flex;flex-direction:column;justify-content:space-between;min-width:0;overflow:hidden">
+          <div>
+            ${c.showToolNum!==false&&toolNum?`<div style="font-size:${c.toolNumFontSize||10}px;font-weight:700;color:#888;letter-spacing:.06em;margin-bottom:2px">${esc(toolNum)}</div>`:''}
+            ${c.showDescription!==false?`<div style="font-size:${c.descFontSize||14}px;font-weight:700;font-family:'IBM Plex Sans',sans-serif;line-height:1.25;color:#1a1916;word-break:break-word">${esc(descRest||item.description)}</div>`:''}
+            ${c.showSku!==false&&item.sku?`<div style="font-size:${c.skuFontSize||9}px;color:#555;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.sku)}</div>`:''}
+            ${c.showVendor!==false&&item.supplier?`<div style="font-size:8px;color:#888;font-family:'IBM Plex Sans',sans-serif;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.supplier)}</div>`:''}
+          </div>
+          <div style="display:flex;align-items:stretch;gap:4px;justify-content:flex-end;padding-right:6px">
+            ${c.showReorderQty!==false?`
+            <div style="border:${c.qtyBorderWeight||1.5}px solid #1a1916;border-radius:3px;padding:2px 5px;text-align:center;display:flex;flex-direction:column;justify-content:center">
+              <div style="font-size:${c.qtyLabelSize||6}px;letter-spacing:.06em;color:#888;font-family:'IBM Plex Mono',monospace">MIN</div>
+              <div style="font-size:${c.qtyFontSize||13}px;font-weight:700;color:#1a1916;line-height:1">${item.minStock||1}${item.minUnit?`<span style="font-size:7px;font-weight:400;color:#666;margin-left:1px">${esc(item.minUnit)}</span>`:''}</div>
+            </div>
+            <div style="border:${c.qtyBorderWeight||1.5}px solid #1a1916;border-radius:3px;padding:2px 5px;text-align:center;display:flex;flex-direction:column;justify-content:center">
+              <div style="font-size:${c.qtyLabelSize||6}px;letter-spacing:.06em;color:#888;font-family:'IBM Plex Mono',monospace">ORDER</div>
+              <div style="font-size:${c.qtyFontSize||13}px;font-weight:700;color:#1a1916;line-height:1">${item.reorderQty||1}${item.reorderUnit?`<span style="font-size:7px;font-weight:400;color:#666;margin-left:1px">${esc(item.reorderUnit)}</span>`:''}</div>
+            </div>`:''}
+            ${c.showQr!==false?`
+            <div style="display:flex;align-items:center">
+              <img src="${qr}" style="width:auto;height:100%;max-height:42px;display:block">
+            </div>`:''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ── LG — Large 4"×3" (384×288px) ─────────────────────────────────────────────
+  if (size==='lg') {
+    const qs = c.qrSize || 112;
+    const photoSize = item.photo && c.showPhoto!==false ? Math.round(qs * 0.72) : 0;
+    const clfs = c.cellLabelFontSize || 11;
+    const lfs = c.locationFontSize || 15;
+    return `
+    <div style="width:384px;height:288px;background:#fff;border:2px solid #1a1916;font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column;overflow:hidden">
+      ${c.showHeader!==false?`
+      <div style="background:${hbg};padding:0 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;height:${c.headerHeight||32}px;overflow:hidden">
+        ${shopLogo
+          ?`<img src="${shopLogo}" style="max-height:${(c.headerHeight||32)-8}px;max-width:120px;object-fit:contain;filter:${isLight(hbg)?'none':'brightness(0) invert(1)'}">`
+          :(c.showCellLabel!==false&&catLabel
+            ?`<span style="font-size:${clfs}px;color:${htext};font-weight:700;letter-spacing:.06em;font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${esc(catLabel)}</span>`
+            :`<span style="font-size:${hdrFontSize||9}px;color:${hTextMuted};letter-spacing:.1em;font-family:${hdrFont};font-weight:${hdrFontWeight}">${shopName}</span>`)}
+        ${item.bin?`<span style="font-size:${lfs}px;color:${htext};font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:.04em;background:rgba(255,255,255,.18);padding:2px 10px;border-radius:4px;flex-shrink:0">${esc(item.bin)}</span>`:''}
+      </div>`:''}
+      <div style="flex:1;display:flex;overflow:hidden">
+        <div style="flex:1;padding:${c.padding||12}px 14px;display:flex;flex-direction:column;justify-content:space-between;min-width:0;overflow:hidden">
+          <div>
+            ${c.showToolNum!==false&&toolNum?`<div style="font-size:${c.toolNumFontSize||11}px;font-weight:700;color:#000;letter-spacing:.08em;margin-bottom:3px">${esc(toolNum)}</div>`:'' }
+            ${c.showDescription!==false?`<div style="font-size:${c.descFontSize||20}px;font-weight:700;font-family:'IBM Plex Sans',sans-serif;line-height:1.15;color:#1a1916;word-break:break-word">${esc(descRest||item.description)}</div>`:''}
+            ${c.showSku!==false&&item.sku?`<div style="font-size:${c.skuFontSize||11}px;color:#000;letter-spacing:.04em;margin-top:4px">${esc(item.supplier?item.supplier+' · ':'')}${esc(item.sku)}</div>`:''}
+          </div>
+          <div>
+            ${c.showVendor!==false&&item.supplier&&!item.sku?`<div style="font-size:10px;color:#000;font-family:'IBM Plex Sans',sans-serif;margin-bottom:6px">${esc(item.supplier)}</div>`:''}
+            ${c.showReorderQty!==false?`
+            <div style="display:flex;gap:6px">
+              <div style="flex:1;border:${c.qtyBorderWeight||1.5}px solid #1a1916;border-radius:5px;padding:5px 8px;text-align:center">
+                <div style="font-size:${c.qtyLabelSize||7}px;letter-spacing:.09em;color:#000;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">MIN STOCK</div>
+                <div style="font-size:${c.qtyFontSize||18}px;font-weight:700;color:#1a1916;line-height:1">${item.minStock||1}${item.minUnit?`<span style="font-size:9px;font-weight:400;color:#666;margin-left:2px">${esc(item.minUnit)}</span>`:''}</div>
+              </div>
+              <div style="flex:1;border:${c.qtyBorderWeight||1.5}px solid #1a1916;border-radius:5px;padding:5px 8px;text-align:center">
+                <div style="font-size:${c.qtyLabelSize||7}px;letter-spacing:.09em;color:#000;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">REORDER QTY</div>
+                <div style="font-size:${c.qtyFontSize||18}px;font-weight:700;color:#1a1916;line-height:1">${item.reorderQty||1}${item.reorderUnit?`<span style="font-size:9px;font-weight:400;color:#666;margin-left:2px">${esc(item.reorderUnit)}</span>`:''}</div>
+              </div>
+            </div>`:''}
+          </div>
+        </div>
+        ${c.showQr!==false?`
+        <div style="width:${qs+16}px;flex-shrink:0;border-left:1.5px solid #e8e5df;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px 8px">
+          ${c.showPhoto!==false&&item.photo?`<img src="${esc(item.photo)}" style="width:${photoSize}px;height:${photoSize}px;object-fit:contain;border:1px solid #eee;border-radius:4px">`:'' }
+          <img src="${qr}" style="width:${qs}px;height:${qs}px;border:2px solid #1a1916;padding:3px">
+          <div style="font-size:7px;color:#000;letter-spacing:.07em;font-family:'IBM Plex Sans',sans-serif">SCAN TO REORDER</div>
+        </div>`:''}
+      </div>
+    </div>`;
+  }
+
+  // ── FULL — Index Card 3"×5" (288×480px) ──────────────────────────────────────
+  const qs = c.qrSize || 140;
+  const clfs = c.cellLabelFontSize || 9;
+  const lfs = c.locationFontSize || 13;
+  const lbfs = c.locationBoxFontSize || 13;
+  return `
+    <div style="width:288px;height:480px;background:#fff;border:2px solid #1a1916;font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column;overflow:hidden">
+      ${c.showHeader!==false?`
+      <div style="background:${hbg};padding:0 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;height:${c.headerHeight||36}px;overflow:hidden">
+        ${shopLogo?`<img src="${shopLogo}" style="max-height:${Math.round((c.headerHeight||36)-10)}px;max-width:80px;object-fit:contain;filter:${isLight(hbg)?'none':'brightness(0) invert(1)'}" onerror="this.style.display='none'">`:``}
+        ${c.showCellLabel!==false&&catLabel
+          ?`<span style="font-size:${clfs}px;color:${htext};font-weight:700;letter-spacing:.07em;font-family:'IBM Plex Mono',monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${shopLogo?'text-align:right':''} ">${esc(catLabel)}</span>`
+          :(!shopLogo?`<span style="font-size:${hdrFontSize||8}px;color:${hTextMuted};letter-spacing:.12em;font-weight:${hdrFontWeight};font-family:${hdrFont}">${shopName} · KANBAN</span>`:``)}
+      </div>`:``}
+      <div style="flex:1;padding:${c.padding||14}px;display:flex;flex-direction:column;overflow:hidden">
+        <div style="margin-bottom:10px">
+          ${c.showToolNum!==false&&toolNum?`<div style="font-size:11px;font-weight:700;color:${hbg};letter-spacing:.08em;margin-bottom:3px">${esc(toolNum)}</div>`:''}
+          ${c.showDescription!==false?`<div style="font-size:${c.descFontSize||18}px;font-weight:700;font-family:'IBM Plex Sans',sans-serif;line-height:1.2;color:#1a1916;word-break:break-word">${esc(descRest||item.description)}</div>`:''}
+          ${c.showSku!==false?`<div style="font-size:${c.skuFontSize||11}px;color:#000;letter-spacing:.05em;margin-top:5px">${esc(item.supplier||'')}${item.supplier&&item.sku?' · ':''}${esc(item.sku||'')}</div>`:''}
+        </div>
+        <div style="height:1px;background:#e8e5df;margin-bottom:10px;flex-shrink:0"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;font-family:'IBM Plex Sans',sans-serif;flex-shrink:0">
+          ${c.showVendorBox!==false?`<div style="background:#f8f6f2;padding:${c.infoBoxPadding||6}px ${(c.infoBoxPadding||6)+3}px;border-radius:4px"><div style="font-size:${c.infoFontSize?c.infoFontSize-3:7}px;letter-spacing:.08em;color:#888;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">VENDOR</div><div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.supplier||'—')}</div></div>`:'<div></div>'}
+          ${c.showLocationBox!==false?`
+          <div style="background:#f8f6f2;padding:${c.infoBoxPadding||6}px ${(c.infoBoxPadding||6)+3}px;border-radius:4px">
+            <div style="font-size:${c.infoFontSize?c.infoFontSize-3:7}px;letter-spacing:.08em;color:#888;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">LOCATION</div>
+            <div style="font-size:${lbfs}px;font-weight:700;color:#1a1916;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'IBM Plex Mono',monospace">${esc(item.bin||'—')}</div>
+          </div>`:'<div></div>'}
+          ${c.showReorderQtyBox!==false?`
+          <div style="grid-column:span 2;border:1.5px solid #1a1916;border-radius:4px;padding:8px 10px;display:flex;align-items:stretch;justify-content:space-around;gap:0">
+            <div style="flex:1;text-align:center">
+              <div style="font-size:${c.qtyLabelSize||7}px;letter-spacing:.1em;color:#000;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">MIN STOCK</div>
+              <div style="font-size:${c.qtyFontSize||20}px;font-weight:700;color:#1a1916;line-height:1">${item.minStock||1}${item.minUnit?`<span style="font-size:9px;font-weight:400;color:#666;margin-left:3px">${esc(item.minUnit)}</span>`:''}</div>
+            </div>
+            <div style="width:1px;background:#e8e5df;margin:0 8px"></div>
+            <div style="flex:1;text-align:center">
+              <div style="font-size:${c.qtyLabelSize||7}px;letter-spacing:.1em;color:#000;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">REORDER QTY</div>
+              <div style="font-size:${c.qtyFontSize||20}px;font-weight:700;color:#1a1916;line-height:1">${item.reorderQty||1}${item.reorderUnit?`<span style="font-size:9px;font-weight:400;color:#666;margin-left:3px">${esc(item.reorderUnit)}</span>`:''}</div>
+            </div>
+          </div>`:''}
+        </div>
+        <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 8px;overflow:hidden">
+          ${c.showPhoto!==false&&item.photo?`
+          <img src="${esc(item.photo)}" style="width:${Math.min(qs, c.showQr!==false ? 118 : 248)}px;height:${Math.min(qs, c.showQr!==false ? 118 : 248)}px;object-fit:contain;border:1px solid #e8e5df;border-radius:4px;flex-shrink:0">`:''} 
+          ${c.showQr!==false?`
+          <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+            <img src="${qr}" style="width:${Math.min(qs, c.showPhoto!==false&&item.photo ? 118 : 248)}px;height:${Math.min(qs, c.showPhoto!==false&&item.photo ? 118 : 248)}px;border:2px solid #1a1916;padding:4px">
+            <div style="font-size:7px;color:#000;margin-top:5px;letter-spacing:.08em;font-family:'IBM Plex Sans',sans-serif">SCAN TO REORDER</div>
+          </div>`:''}
+        </div>
+      </div>
+    </div>`;
+}
+
+function printLabel() {
+  if (!labelItem) return;
+  // Reuse the hardened print path (waits for images, cross-platform afterprint cleanup).
+  const copies = parseInt(document.getElementById('printCopies')?.value) || 1;
+  doPrint([labelItem], labelSize, copies);
+}
+
+// Auto-detect item type from description/SKU
+function detectItemType(text) {
+  if (!text) return null;
+  const t = text.toLowerCase();
+  // Threading
+  if (/tap|thread\s*mill|threadmill|tpi|npt|spiral flute tap|roll tap|form tap|sti tap/i.test(t))
+    return firstTypeWithColor('#b8860a') || 'tap right hand';
+  // Holemaking
+  if (/drill|reamer|countersink|counterbore|spot drill|center drill|boring/i.test(t))
+    return firstTypeWithColor('#c41e1e') || 'drill';
+  if (/chamfer\s*mill/i.test(t)) return 'chamfer mill';
+  // Indexable
+  if (/insert|cnmg|ccmt|tcmt|apmt|wnmg|dnmg|indexable|face\s*mill|shell\s*mill/i.test(t))
+    return firstTypeWithColor('#c95e0a') || 'insert';
+  // Specialty
+  if (/dovetail|keyseat|key seat|back.?chamfer|engrav|tapered.*mill|taper.*end|slot\s*mill|lollipop/i.test(t))
+    return firstTypeWithColor('#6d28d9') || 'specialty';
+  // End mills — check flute count: 4+ = steel, 3 or fewer = aluminum
+  if (/end\s*mill|endmill|ball.*mill|bull.*nose|form.*mill|radius.*mill|axfps|e-cut|supracarb|multicut|polychrom|sphericut|finisher|rougher/i.test(t)) {
+    const fluteMatch = t.match(/(\d+)\s*(?:fl(?:ute)?s?)/);
+    const flutes = fluteMatch ? parseInt(fluteMatch[1]) : null;
+    const isSteel = flutes !== null && flutes >= 4;
+    if (/ball/i.test(t)) return isSteel ? 'ball end mill (steel)' : 'ball end mill (aluminum)';
+    if (/bull|corner\s*rad/i.test(t)) return isSteel ? 'bull nose end mill (steel)' : 'bull nose end mill (aluminum)';
+    return isSteel ? 'flat end mill (steel)' : 'flat end mill (aluminum)';
+  }
+  return null;
+}
+
+function firstTypeWithColor(color) {
+  // Find first type in typeColors that matches this color
+  const match = Object.entries(typeColors).find(([, c]) => c === color);
+  return match ? match[0] : null;
+}
+
+function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+function buildBinField(categoryColor, currentBin) {
+  const wrap = document.getElementById('fBinWrap');
+  if (!wrap) return;
+
+  // Find the cell and its cell color
+  let cell = cats[categoryColor];
+  let cellColor = categoryColor;
+  if (!cell) {
+    for (const [cc, c] of Object.entries(cats)) {
+      if (c.subtypes && c.subtypes[categoryColor] !== undefined) { cell = c; cellColor = cc; break; }
+    }
+  }
+
+  const isTool = cell && (cell.label||'').toLowerCase().includes('tool');
+
+  // Tool cells or no cell → plain text input
+  if (!cell || isTool) {
+    wrap.innerHTML = `<input type="text" id="fBin" placeholder="e.g. A-01" style="font-family:var(--mono);width:100%" value="${esc(currentBin||'')}">`;
+    return;
+  }
+
+  const locs = cell.subtypes ? Object.values(cell.subtypes).sort() : [];
+  const hasCurrentVal = currentBin && !locs.includes(currentBin);
+
+  wrap.innerHTML = `
+    <select id="fBin" style="width:100%" onchange="onBinSelectChange('${esc(cellColor)}')">
+      <option value="">— none —</option>
+      ${locs.map(l => `<option value="${esc(l)}" ${l===currentBin?'selected':''}>${esc(l)}</option>`).join('')}
+      ${hasCurrentVal ? `<option value="${esc(currentBin)}" selected>${esc(currentBin)}</option>` : ''}
+      <option value="__add__">＋ Add location to cell...</option>
+    </select>
+    <div id="addLocRow" style="display:none;margin-top:6px;gap:6px;align-items:center">
+      <input id="addLocInput" type="text" placeholder="New location name (e.g. Grey Cabinet)" style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--text);outline:none"
+        onkeydown="if(event.key==='Enter')saveNewLocation('${esc(cellColor)}');if(event.key==='Escape')cancelAddLocation()">
+      <button type="button" onclick="saveNewLocation('${esc(cellColor)}')" style="padding:6px 12px;background:var(--accent);color:#fff;border:none;border-radius:var(--radius);font-size:12px;font-family:var(--sans);font-weight:500;cursor:pointer;white-space:nowrap">Add</button>
+      <button type="button" onclick="cancelAddLocation()" style="padding:6px 10px;background:none;color:var(--muted);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;font-family:var(--sans);cursor:pointer">✕</button>
+    </div>`;
+}
+
+function onBinSelectChange(cellColor) {
+  const sel = document.getElementById('fBin');
+  if (sel.value === '__add__') {
+    sel.value = ''; // revert to none while adding
+    const row = document.getElementById('addLocRow');
+    row.style.display = 'flex';
+    document.getElementById('addLocInput').focus();
+  }
+}
+
+async function saveNewLocation(cellColor) {
+  const input = document.getElementById('addLocInput');
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+
+  // Generate a unique muted color for the new location
+  const hue = Math.floor(Math.random() * 360);
+  const color = `hsl(${hue},35%,48%)`;
+  // Convert to hex for storage consistency
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = color;
+  const hex = ctx.fillStyle; // browser normalizes to hex
+
+  if (!cats[cellColor].subtypes) cats[cellColor].subtypes = {};
+  cats[cellColor].subtypes[hex] = name;
+
+  try {
+    await fetch('/api/categories', {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(cats)
+    });
+    // Rebuild dropdown with new location selected
+    const catColor = document.getElementById('fCategory').value;
+    buildBinField(catColor, name);
+    document.getElementById('fBin').value = name;
+  } catch(e) {
+    alert('Failed to save location');
+  }
+}
+
+function cancelAddLocation() {
+  const row = document.getElementById('addLocRow');
+  if (row) row.style.display = 'none';
+  const input = document.getElementById('addLocInput');
+  if (input) input.value = '';
+}
+
+
+
+
+
+document.getElementById('itemModal').addEventListener('click',function(e){if(e.target===this)closeModal();});
+document.getElementById('labelModal').addEventListener('click',function(e){if(e.target===this)closeLabelModal();});
+document.addEventListener('keydown',e=>{
+  if(scanMode) return; // don't intercept in scan mode
+  if(e.key==='Escape'){closeModal();closeLabelModal();}
+  if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();document.getElementById('searchInput').focus();}
+});
+
+load();
+
+// Update favicon from shop logo
+function updateFavicon() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.shopLogo) {
+    const link = document.getElementById('favicon');
+    if (link) link.href = s.shopLogo;
+  }
+}
+updateFavicon();
 </script>
+<script>window.SHOP_APP_ID = "kanban";</script>
 </body>
 </html>

@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" href="/favicon.png"><link id="favicon" rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KANBAN · Order Queue</title>
+<link rel="stylesheet" href="/theme-tokens.css">
+<!-- Blocking on purpose: deferred, the page paints light then flips. -->
+<script src="/theme.js"></script>
+<script>
+/* The accent used to default to blue, and settings writes whatever the
+ * picker shows on every save — so browsers that never chose a colour
+ * still have that blue stored, where an inline style beats the sheet.
+ * Retiring exactly the old default lets the house rust through; any
+ * other value was a deliberate choice and is left alone. */
+try{var _t=JSON.parse(localStorage.getItem("kanban_settings")||"{}");
+if(_t.accentColor==="#1a4fa8"){delete _t.accentColor;
+localStorage.setItem("kanban_settings",JSON.stringify(_t));}}catch(e){}
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; }
+  @media print { body { background: #fff !important; } }
+
+  header { background:var(--surface);border-bottom:1px solid var(--line); color:var(--ink); padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; ;position:sticky;top:0;z-index:100}
+  .logo { font-family: var(--mono); font-size: 13px; letter-spacing: 0.08em; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+  .logo-dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; }
+  .back-btn { display: flex; align-items: center; gap: 6px; color:var(--ink-soft); text-decoration: none; font-size: 13px; transition: color 0.15s; }
+  .back-btn:hover { color:var(--ink); }
+
+  .main { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+  .page-header { margin-bottom: 28px; }
+  .page-title { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+  .page-sub { color: var(--muted); font-size: 14px; }
+
+  .empty-state { text-align: center; padding: 80px 24px; color: var(--muted); }
+  .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.3; }
+  .empty-state h2 { font-size: 18px; font-weight: 500; color: var(--text); margin-bottom: 8px; }
+  .empty-state p { margin-bottom: 20px; }
+  .empty-state a { color: var(--cart); text-decoration: none; font-weight: 500; }
+
+  /* Vendor group */
+  .vendor-group { margin-bottom: 20px; background: var(--surface); border: 1px solid var(--border-light); border-radius: 10px; overflow: hidden; box-shadow: var(--shadow); }
+  .vendor-header {
+    padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border-light); background: #faf9f6;
+  }
+  .vendor-left { display: flex; align-items: center; gap: 12px; }
+  .vendor-name { font-size: 15px; font-weight: 600; }
+  .vendor-count { font-family: var(--mono); font-size: 11px; color: var(--muted); background: #f0ede7; padding: 2px 8px; border-radius: 100px; }
+  .vendor-no-url { font-size: 11px; color: var(--reorder); background: var(--reorder-bg); padding: 2px 8px; border-radius: 100px; }
+  .vendor-actions { display: flex; gap: 8px; align-items: center; }
+
+  .item-row { padding: 12px 20px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--border-light); }
+  .item-row:last-child { border-bottom: none; }
+  .item-check { width: 16px; height: 16px; accent-color: var(--cart); cursor: pointer; flex-shrink: 0; }
+  .item-info { flex: 1; min-width: 0; }
+  .item-sku { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--text); }
+  .item-desc { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item-meta { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+  .item-qty { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--text); white-space: nowrap; }
+  .item-qty span { color: var(--muted); font-weight: 400; font-size: 11px; }
+  .item-url-link { font-size: 12px; color: var(--cart); text-decoration: none; font-family: var(--mono); }
+  .item-url-link:hover { text-decoration: underline; }
+  .no-url-badge { font-size: 11px; color: var(--reorder); background: var(--reorder-bg); padding: 2px 8px; border-radius: 4px; }
+  .added-by { font-size: 11px; color: var(--muted); font-style: italic; flex-shrink: 0; }
+  .remove-btn { color: var(--muted); background: none; border: none; cursor: pointer; padding: 4px; border-radius: 4px; display: flex; align-items: center; transition: color 0.15s, background 0.15s; flex-shrink: 0; }
+  .item-row:hover .print-btn { opacity: 1; }
+  .print-btn { background: none; border: 1px solid var(--border); color: var(--muted); cursor: pointer; padding: 4px 9px; border-radius: 4px; opacity: 0; transition: all 0.15s; flex-shrink: 0; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-family: var(--sans); font-weight: 500; }
+  .print-btn:hover { color: var(--text); border-color: var(--text); }
+  .label-preview-area { background: var(--bg); border-radius: 6px; padding: 20px; display: flex; justify-content: center; margin-bottom: 14px; min-height: 100px; align-items: center; }
+  .size-selector-row { display: grid; grid-template-columns: repeat(5,1fr); gap: 6px; margin-bottom: 14px; }
+  .size-btn { border: 1px solid var(--border); border-radius: 6px; padding: 7px 4px; text-align: center; cursor: pointer; background: var(--surface); transition: all 0.15s; }
+  .size-btn:hover { border-color: var(--accent); }
+  .size-btn.active { border-color: var(--accent); background: #e8f0fb; }
+  .size-btn .sn { font-size: 11px; font-weight: 600; display: block; }
+  .size-btn .sd { font-size: 10px; color: var(--muted); display: block; font-family: monospace; }
+  .remove-btn:hover { color: var(--reorder); background: var(--reorder-bg); }
+
+  /* Action bar at bottom */
+  .action-bar {
+    position: sticky; bottom: 0; background: var(--surface);
+    border-top: 1px solid var(--border); padding: 16px 24px;
+    display: flex; align-items: center; justify-content: space-between;
+    box-shadow: 0 -4px 12px rgba(0,0,0,0.06); gap: 16px; flex-wrap: wrap;
+  }
+  .action-bar-left { color: var(--muted); font-size: 13px; }
+  .action-bar-right { display: flex; gap: 10px; }
+
+  .btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px; border-radius: var(--radius); font-family: var(--sans); font-size: 13px; font-weight: 500; cursor: pointer; border: 1px solid transparent; transition: all 0.15s; text-decoration: none; white-space: nowrap; }
+  .btn-primary { background:var(--text);color:var(--paper); border-color: var(--text); }
+  .btn-primary:hover { background: #333; }
+  .btn-ghost { background: transparent; color: var(--muted); border-color: var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text); }
+  .btn-order { background: var(--cart); color:var(--paper); border-color: var(--cart); }
+  .btn-order:hover { background: #153d87; }
+  .btn-order { background: var(--ok); color: #fff; border-color: var(--ok); }
+
+  /* Open URLs flash feedback */
+  .flash { position: fixed; top: 72px; right: 24px; background:var(--text);color:var(--paper); padding: 10px 18px; border-radius: var(--radius); font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); opacity: 0; transition: opacity 0.2s; pointer-events: none; z-index: 999; }
+  .flash.show { opacity: 1; }
+
+  /* Purchased confirmation overlay */
+  .confirm-overlay { position: fixed; inset: 0; background: rgba(10,10,8,0.5); z-index: 300; display: flex; align-items: center; justify-content: center; padding: 24px; opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  .confirm-overlay.open { opacity: 1; pointer-events: all; }
+  .confirm-modal { background: var(--surface); border-radius: 10px; width: 100%; max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.2); overflow: hidden; }
+  .confirm-header { padding: 20px 24px 16px; border-bottom: 1px solid var(--border-light); }
+  .confirm-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .confirm-sub { font-size: 13px; color: var(--muted); }
+  .confirm-body { padding: 16px 24px; max-height: 50vh; overflow-y: auto; }
+  .confirm-vendor { margin-bottom: 16px; }
+  .confirm-vendor-name { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 8px; }
+  .confirm-item { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+  .confirm-item input[type=checkbox] { accent-color: var(--ok); width: 15px; height: 15px; cursor: pointer; }
+  .confirm-item-label { font-size: 13px; cursor: pointer; }
+  .confirm-item-sku { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .confirm-footer { padding: 16px 24px; border-top: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .confirm-footer-note { font-size: 12px; color: var(--muted); }
+
+  /* Phone: stop the vendor headers and item rows from overflowing off-screen */
+  @media (max-width: 640px) {
+    header { padding: 0 14px; }
+    .logo { font-size: 11px; white-space: nowrap; }
+    .back-btn { font-size: 0; gap: 0; }           /* keep the arrow, drop the label */
+    .back-btn svg { width: 20px; height: 20px; }
+    .main { padding: 20px 14px; }
+    .page-title { font-size: 19px; }
+    .vendor-header { flex-wrap: wrap; gap: 8px 10px; }
+    .vendor-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
+    .item-row { flex-wrap: wrap; gap: 4px 12px; }
+    .item-info { flex: 1 1 100%; }
+    .item-desc { white-space: normal; }
+    .item-meta { flex-wrap: wrap; gap: 8px 12px; width: 100%; }
+    .print-btn { opacity: 1; }                     /* no hover on touch */
+    .action-bar { padding: 12px 14px; }
+    .action-bar-right { width: 100%; }
+    .action-bar-right .btn { flex: 1; justify-content: center; }
+  }
+
+
+:root[data-theme="dark"]{--surface2:#2b2721}
+</style>
+<script src="/buildLabel.js"></script>
+</head>
+<body>
+
+<header>
+  <div class="logo"><span class="logo-dot"></span>ORDER QUEUE</div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span id="theme-toggle"></span>
+    <a href="/" class="back-btn">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      Back to inventory
+    </a>
+  </div>
+</header>
+
+<div class="main">
+  <div class="page-header">
+    <div class="page-title">Order Queue</div>
+    <div class="page-sub" id="pageSubtitle">Loading...</div>
+  </div>
+  <div id="queueContent"></div>
+</div>
+
+<div class="action-bar" id="actionBar" style="display:none">
+  <div class="action-bar-left" id="actionSummary"></div>
+  <div class="action-bar-right">
+    <button class="btn btn-ghost" onclick="openAllUrls()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+      Open all URLs
+    </button>
+    <button class="btn btn-order" onclick="openPurchasedModal()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      Mark ordered...
+    </button>
+  </div>
+</div>
+
+<!-- Purchased confirmation modal -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-modal">
+    <div class="confirm-header">
+      <div class="confirm-title">Mark as ordered</div>
+      <div class="confirm-sub">Check off what you've placed orders for. Items will move to the receiving queue and removed from the queue.</div>
+    </div>
+    <div class="confirm-body" id="confirmBody"></div>
+    <div class="confirm-footer">
+      <div class="confirm-footer-note" id="confirmNote"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="closeConfirm()">Cancel</button>
+        <button class="btn btn-order" onclick="submitPurchased()">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Confirm ordered
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Print modal -->
+<div class="modal-overlay" id="cartPrintModal" style="position:fixed;inset:0;background:rgba(10,10,8,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;pointer-events:none;transition:opacity .2s">
+  <div style="background:var(--surface);border-radius:10px;width:100%;max-width:540px;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+    <div style="padding:18px 22px 14px;border-bottom:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:15px;font-weight:600" id="cartPrintTitle">Print Label</div>
+      <button onclick="closeCartPrint()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted)">✕</button>
+    </div>
+    <div style="padding:16px 22px">
+      <div class="size-selector-row">
+        <div class="size-btn" data-size="xs" onclick="cartSetSize('xs',this)"><span class="sn">Bin Label</span><span class="sd">1.5×1 in</span></div>
+        <div class="size-btn active" data-size="sm" onclick="cartSetSize('sm',this)"><span class="sn">Tool Card</span><span class="sd">2×0.75 in</span></div>
+        <div class="size-btn" data-size="md" onclick="cartSetSize('md',this)"><span class="sn">Medium</span><span class="sd">3×2 in</span></div>
+        <div class="size-btn" data-size="lg" onclick="cartSetSize('lg',this)"><span class="sn">Large</span><span class="sd">4×3 in</span></div>
+        <div class="size-btn" data-size="full" onclick="cartSetSize('full',this)"><span class="sn">Full Card</span><span class="sd">4×6 in</span></div>
+      </div>
+      <div class="label-preview-area"><div id="cartLabelPreview"><span style="color:var(--muted);font-size:12px">Loading…</span></div></div>
+    </div>
+    <div style="padding:14px 22px;border-top:1px solid var(--border-light);display:flex;justify-content:flex-end;gap:8px">
+      <button onclick="closeCartPrint()" style="padding:8px 16px;background:none;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-family:var(--sans);font-size:13px;color:var(--muted)">Close</button>
+      <button onclick="cartDoPrint()" style="padding:8px 16px;background:#1a1916;color:#fff;border:none;border-radius:6px;cursor:pointer;font-family:var(--sans);font-size:13px;font-weight:500">🖨 Print</button>
+    </div>
+  </div>
+</div>
+<div id="cartPrintArea" style="display:none"></div>
+
+<div class="flash" id="flash"></div>
+
+<script>
+  let cartData = [];   // hydrated cart items
+  let vendorGroups = {}; // vendor -> [cartItem]
+  let settings = {};
+  let typeColors = {};
+  let cats = {};
+
+  async function load() {
+    const [cartRes, typesRes, catsRes] = await Promise.all([
+      fetch('/api/cart'), fetch('/api/types'), fetch('/api/categories')
+    ]);
+    const data = await cartRes.json();
+    typeColors = await typesRes.json();
+    cats = await catsRes.json();
+    settings = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+    cartData = data.items;
+    buildVendorGroups();
+    render();
+  }
+
+  function buildVendorGroups() {
+    vendorGroups = {};
+    cartData.forEach(c => {
+      const vendor = c.item.supplier || 'Unknown Supplier';
+      if (!vendorGroups[vendor]) vendorGroups[vendor] = [];
+      vendorGroups[vendor].push(c);
+    });
+  }
+
+  function fmtPrice(p) {
+    if (!p) return '';
+    return '$' + Number(p).toFixed(2);
+  }
+  function fmtQtyUnit(qty, unit) {
+    return unit ? `${qty} ${unit}` : String(qty);
+  }
+  function itemTotal(item) {
+    return (item.price || 0) * (item.reorderQty || 1);
+  }
+
+  function render() {
+    const total = cartData.length;
+    const vendors = Object.keys(vendorGroups);
+    const withUrl = cartData.filter(c => c.item.url).length;
+    const withoutUrl = total - withUrl;
+    const grandTotal = cartData.reduce((s, c) => s + itemTotal(c.item), 0);
+
+    document.getElementById('pageSubtitle').textContent =
+      total === 0 ? 'No items queued' :
+      `${total} item${total !== 1 ? 's' : ''} from ${vendors.length} supplier${vendors.length !== 1 ? 's' : ''}${withoutUrl > 0 ? ` · ${withoutUrl} missing URL` : ''}${grandTotal > 0 ? ` · Est. ${fmtPrice(grandTotal)}` : ''}`;
+
+    const content = document.getElementById('queueContent');
+    const actionBar = document.getElementById('actionBar');
+
+    if (total === 0) {
+      content.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">◫</div>
+        <h2>Queue is empty</h2>
+        <p>Scan a kanban card or click "Queue" on any item to add it here.</p>
+        <a href="/">← Back to inventory</a>
+      </div>`;
+      actionBar.style.display = 'none';
+      return;
+    }
+
+    actionBar.style.display = 'flex';
+    const totalStr = grandTotal > 0 ? ` · <strong>${fmtPrice(grandTotal)}</strong> est. total` : '';
+    document.getElementById('actionSummary').innerHTML =
+      `${total} item${total !== 1 ? 's' : ''} · ${vendors.length} vendor${vendors.length !== 1 ? 's' : ''}${totalStr}`;
+
+    content.innerHTML = vendors.sort().map(vendor => {
+      const items = vendorGroups[vendor];
+      const allHaveUrl = items.every(c => c.item.url);
+      const someHaveUrl = items.some(c => c.item.url);
+      const urlCount = items.filter(c => c.item.url).length;
+      const vendorTotal = items.reduce((s,c) => s + itemTotal(c.item), 0);
+
+      return `<div class="vendor-group" id="vg-${CSS.escape(vendor)}">
+        <div class="vendor-header">
+          <div class="vendor-left">
+            <div class="vendor-name">${esc(vendor)}</div>
+            <div class="vendor-count">${items.length} item${items.length !== 1 ? 's' : ''}</div>
+            ${vendorTotal > 0 ? `<div class="vendor-count" style="background:var(--border-light);color:var(--text);font-weight:600">${fmtPrice(vendorTotal)}</div>` : ''}
+            ${!allHaveUrl ? `<div class="vendor-no-url">${items.length - urlCount} missing URL</div>` : ''}
+          </div>
+          <div class="vendor-actions">
+            ${someHaveUrl ? `<button class="btn btn-ghost" style="font-size:12px;padding:5px 12px" onclick="openVendorUrls('${escAttr(vendor)}')">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Open ${urlCount} URL${urlCount !== 1 ? 's' : ''}
+            </button>` : ''}
+            <button class="btn btn-order" style="font-size:12px;padding:5px 12px" onclick="markVendorPurchased('${escAttr(vendor)}')">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+              All ordered
+            </button>
+          </div>
+        </div>
+        ${items.map(c => `
+          <div class="item-row" id="row-${c.itemId}">
+            <div class="item-info">
+              <div class="item-sku">${esc(c.item.sku)}</div>
+              <div class="item-desc">${esc(c.item.description)}</div>
+            </div>
+            <div class="item-meta">
+              <div class="item-qty">${fmtQtyUnit(c.item.reorderQty||1, c.item.reorderUnit)} <span>to order</span></div>
+              ${c.item.price ? `<div style="font-family:var(--mono);font-size:12px;color:var(--text);font-weight:500">${fmtPrice(itemTotal(c.item))}</div>` : ''}
+              ${c.item.url
+                ? `<a href="${esc(c.item.url)}" target="_blank" class="item-url-link">${urlShort(c.item.url)} ↗</a>`
+                : `<span class="no-url-badge">no URL</span>`}
+              ${c.addedBy ? `<span class="added-by">by ${esc(c.addedBy)}</span>` : ''}
+            </div>
+            <button class="print-btn" onclick="event.stopPropagation();openCartPrint(${c.itemId})" title="Print label">
+              <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+              Print
+            </button>
+            <button class="remove-btn" onclick="removeItem(${c.itemId})" title="Remove from queue">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>`).join('')}
+      </div>`;
+    }).join('');
+  }
+
+  async function openAllUrls() {
+    const urls = [...new Set(cartData.filter(c => c.item.url).map(c => c.item.url))];
+    if (urls.length === 0) { showFlash('No URLs to open — add URLs to items first'); return; }
+    await openUrlsSequentially(urls);
+    showFlash(`Opened ${urls.length} URL${urls.length !== 1 ? 's' : ''} in new tabs`);
+  }
+
+  async function openVendorUrls(vendor) {
+    const items = vendorGroups[vendor] || [];
+    const urls = [...new Set(items.filter(c => c.item.url).map(c => c.item.url))];
+    if (urls.length === 0) { showFlash('No URLs for ' + vendor); return; }
+    await openUrlsSequentially(urls);
+    showFlash(`Opened ${urls.length} URL${urls.length !== 1 ? 's' : ''} for ${vendor}`);
+  }
+
+  function openUrlsSequentially(urls) {
+    return new Promise(resolve => {
+      // Open first immediately (required to avoid popup blocking on user gesture)
+      window.open(urls[0], '_blank');
+      if (urls.length === 1) { resolve(); return; }
+      // Open remaining with short delays
+      let i = 1;
+      const next = () => {
+        if (i >= urls.length) { resolve(); return; }
+        window.open(urls[i], '_blank');
+        i++;
+        setTimeout(next, 150);
+      };
+      setTimeout(next, 150);
+    });
+  }
+
+  async function markVendorPurchased(vendor) {
+    const items = vendorGroups[vendor] || [];
+    const ids = items.map(c => c.itemId);
+    await fetch('/api/cart/ordered', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemIds: ids })
+    });
+    showFlash(`Moved ${ids.length} items to receiving queue from ${vendor}`);
+    cartData = cartData.filter(c => !ids.includes(c.itemId));
+    buildVendorGroups();
+    render();
+  }
+
+  async function removeItem(itemId) {
+    await fetch(`/api/cart/${itemId}`, { method: 'DELETE' });
+    cartData = cartData.filter(c => c.itemId !== itemId);
+    buildVendorGroups();
+    render();
+  }
+
+  // Purchased modal — granular per-item confirmation
+  function openPurchasedModal() {
+    const vendors = Object.keys(vendorGroups).sort();
+    document.getElementById('confirmBody').innerHTML = vendors.map(vendor => {
+      const items = vendorGroups[vendor];
+      return `<div class="confirm-vendor">
+        <div class="confirm-vendor-name">${esc(vendor)}</div>
+        ${items.map(c => `
+          <div class="confirm-item">
+            <input type="checkbox" id="pc-${c.itemId}" value="${c.itemId}" checked>
+            <label for="pc-${c.itemId}" class="confirm-item-label">
+              ${esc(c.item.description)}
+              <span class="confirm-item-sku"> — ${esc(c.item.sku)}</span>
+            </label>
+          </div>`).join('')}
+      </div>`;
+    }).join('');
+    updateConfirmNote();
+    document.getElementById('confirmOverlay').classList.add('open');
+    // Update note when checkboxes change
+    document.querySelectorAll('#confirmBody input[type=checkbox]').forEach(cb => {
+      cb.addEventListener('change', updateConfirmNote);
+    });
+  }
+
+  function updateConfirmNote() {
+    const checked = document.querySelectorAll('#confirmBody input[type=checkbox]:checked').length;
+    const total = document.querySelectorAll('#confirmBody input[type=checkbox]').length;
+    document.getElementById('confirmNote').textContent = `${checked} of ${total} items selected`;
+  }
+
+  function closeConfirm() { document.getElementById('confirmOverlay').classList.remove('open'); }
+
+  async function submitPurchased() {
+    const checked = [...document.querySelectorAll('#confirmBody input[type=checkbox]:checked')];
+    const ids = checked.map(cb => parseInt(cb.value));
+    if (ids.length === 0) { closeConfirm(); return; }
+    await fetch('/api/cart/ordered', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itemIds: ids })
+    });
+    closeConfirm();
+    showFlash(`${ids.length} item${ids.length !== 1 ? 's' : ''} moved to receiving queue`);
+    cartData = cartData.filter(c => !ids.includes(c.itemId));
+    buildVendorGroups();
+    render();
+  }
+
+  function showFlash(msg) {
+    const el = document.getElementById('flash');
+    el.textContent = msg;
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2800);
+  }
+
+  function urlShort(url) {
+    try { return new URL(url).hostname.replace('www.', ''); }
+    catch { return url.substring(0, 20); }
+  }
+
+  function esc(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function escAttr(str) {
+    return String(str).replace(/'/g, "\\'");
+  }
+
+  document.getElementById('confirmOverlay').addEventListener('click', function(e) {
+    if (e.target === this) closeConfirm();
+  });
+
+  // --- Print modal ---
+  let cartPrintItem = null;
+  let cartPrintQr = null;
+  let cartPrintSize = 'sm';
+
+  function openCartPrint(id) {
+    const c = cartData.find(c => c.itemId === id);
+    if (!c) return;
+    cartPrintItem = c;
+    const item = c.item;
+    document.getElementById('cartPrintTitle').textContent = item.description;
+    document.querySelectorAll('#cartPrintModal .size-btn').forEach(el =>
+      el.classList.toggle('active', el.dataset.size === cartPrintSize));
+    document.getElementById('cartLabelPreview').innerHTML = '<span style="color:var(--muted);font-size:12px">Loading...</span>';
+    const modal = document.getElementById('cartPrintModal');
+    modal.style.opacity = '1';
+    modal.style.pointerEvents = 'all';
+    cartPrintQr = null;
+    fetch('/api/items/' + item.id + '/qr').then(r => r.json()).then(({qr}) => {
+      cartPrintQr = qr;
+      cartRenderPreview();
+    });
+  }
+
+  function cartSetSize(size, el) {
+    cartPrintSize = size;
+    document.querySelectorAll('#cartPrintModal .size-btn').forEach(e => e.classList.remove('active'));
+    el.classList.add('active');
+    cartRenderPreview();
+  }
+
+  function cartRenderPreview() {
+    if (!cartPrintItem || !cartPrintQr) return;
+    document.getElementById('cartLabelPreview').innerHTML = pickupWrap(cartPrintItem.item, buildLabel(cartPrintItem.item, cartPrintQr, cartPrintSize));
+  }
+
+  function closeCartPrint() {
+    const modal = document.getElementById('cartPrintModal');
+    modal.style.opacity = '0';
+    modal.style.pointerEvents = 'none';
+    cartPrintItem = null;
+    cartPrintQr = null;
+  }
+
+  async function cartDoPrint() {
+    if (!cartPrintItem || !cartPrintQr) return;
+    const label = pickupWrap(cartPrintItem.item, buildLabel(cartPrintItem.item, cartPrintQr, cartPrintSize));
+    const pa = document.getElementById('cartPrintArea');
+    pa.innerHTML = '<style>@import url(\'https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap\');@page{margin:10mm;size:auto}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}body{background:#fff!important;margin:0}</style>' +
+      (cartPrintSize === 'md' ? '<div style="display:flex;flex-direction:column;gap:24px"><div style="line-height:0;flex-shrink:0">' + label + '</div><div style="line-height:0;flex-shrink:0">' + label + '</div></div>' : label);
+    pa.style.display = 'block';
+    document.querySelector('.main').style.display = 'none';
+    document.querySelector('header').style.display = 'none';
+    document.getElementById('cartPrintModal').style.opacity = '0';
+    document.getElementById('cartPrintModal').style.pointerEvents = 'none';
+    const imgs = [...pa.querySelectorAll('img')];
+    await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(r => { img.onload=r; img.onerror=r; setTimeout(r,2000); })));
+    await new Promise(r => setTimeout(r, 400));
+    window.print();
+    pa.style.display = 'none'; pa.innerHTML = '';
+    document.querySelector('.main').style.display = '';
+    document.querySelector('header').style.display = '';
+  }
+
+  document.getElementById('cartPrintModal').addEventListener('click', function(e) {
+    if (e.target === this) closeCartPrint();
+  });
+
+  // Apply settings from localStorage
+  (function() {
+    const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+    if (s.accentColor) document.documentElement.style.setProperty('--accent', s.accentColor);
+    if (s.fontSize) document.body.style.fontSize = s.fontSize;
+    const name = (s.shopName || 'YOUR SHOP').toUpperCase();
+    const logoEl = document.querySelector('.logo');
+    if (logoEl) logoEl.innerHTML = '<span class="logo-dot" style="background:' + (s.accentColor||'#c4351c') + '"></span>' + name + ' / ORDER QUEUE';
+  })();
+
+  load();
+
+// Update favicon from shop logo
+function updateFavicon() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.shopLogo) {
+    const link = document.getElementById('favicon');
+    if (link) link.href = s.shopLogo;
+  }
+}
+updateFavicon();
+</script>
+<script>window.SHOP_APP_ID = "kanban";</script>
+</body>
+</html>

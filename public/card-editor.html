@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" href="/favicon.png"><link id="favicon" rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KANBAN · Card Editor</title>
+<link rel="stylesheet" href="/theme-tokens.css">
+<!-- Blocking on purpose: deferred, the page paints light then flips. -->
+<script src="/theme.js"></script>
+<script>
+/* The accent used to default to blue, and settings writes whatever the
+ * picker shows on every save — so browsers that never chose a colour
+ * still have that blue stored, where an inline style beats the sheet.
+ * Retiring exactly the old default lets the house rust through; any
+ * other value was a deliberate choice and is left alone. */
+try{var _t=JSON.parse(localStorage.getItem("kanban_settings")||"{}");
+if(_t.accentColor==="#1a4fa8"){delete _t.accentColor;
+localStorage.setItem("kanban_settings",JSON.stringify(_t));}}catch(e){}
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5;transition:background .2s}
+
+header{background:var(--surface);border-bottom:1px solid var(--line);color:var(--ink);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-family:var(--mono);font-size:13px;letter-spacing:.08em;font-weight:500;display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none}
+.logo-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.back-btn{display:flex;align-items:center;gap:6px;color:var(--ink-soft);text-decoration:none;font-size:13px;transition:color .15s}
+.back-btn:hover{color:var(--ink)}
+
+.layout{display:grid;grid-template-columns:340px 1fr;min-height:calc(100vh - 56px)}
+
+/* Left panel */
+.panel{background:var(--surface);border-right:1px solid var(--border-light);overflow-y:auto;display:flex;flex-direction:column}
+.size-tabs{display:flex;border-bottom:1px solid var(--border-light);background:var(--bg)}
+.size-tab{flex:1;padding:11px 8px;text-align:center;font-size:12px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);transition:all .15s;user-select:none}
+.size-tab:hover{color:var(--text)}
+.size-tab.active{color:var(--accent);border-bottom-color:var(--accent);background:var(--surface)}
+.size-tab .dim{display:block;font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:1px}
+
+.controls{flex:1;padding:20px}
+.section{margin-bottom:24px}
+.section-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid var(--border-light)}
+
+/* Control rows */
+.ctrl-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border-light);gap:12px}
+.ctrl-row:last-child{border-bottom:none}
+.ctrl-label{font-size:13px;font-weight:500;flex:1}
+.ctrl-sub{font-size:11px;color:var(--muted);margin-top:1px}
+
+/* Toggle */
+.toggle-wrap{cursor:pointer;flex-shrink:0}
+.toggle-track{width:36px;height:20px;border-radius:10px;background:var(--border);position:relative;transition:background .2s}
+.toggle-track.on{background:var(--accent)}
+.toggle-thumb{width:16px;height:16px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle-track.on .toggle-thumb{transform:translateX(16px)}
+
+/* Slider */
+.slider-wrap{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.slider-wrap input[type=range]{width:90px;accent-color:var(--accent);cursor:pointer}
+.slider-val{font-family:var(--mono);font-size:11px;color:var(--muted);min-width:28px;text-align:right}
+
+/* Select */
+select.ctrl-select{padding:5px 24px 5px 8px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:12px;background:var(--surface);color:var(--text);outline:none;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b6860'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 6px center;cursor:pointer;flex-shrink:0}
+select.ctrl-select:focus{border-color:var(--accent)}
+
+/* Color picker row */
+.color-row{display:flex;gap:6px;align-items:center;flex-wrap:wrap;padding:8px 0}
+.color-swatch{width:24px;height:24px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:border-color .15s;flex-shrink:0}
+.color-swatch.active{border-color:var(--text)}
+input[type=color].color-input{width:32px;height:24px;padding:1px 2px;border:1px solid var(--border);border-radius:4px;cursor:pointer}
+
+/* Right panel — preview */
+.preview-panel{background:var(--bg);display:flex;flex-direction:column;align-items:center;padding:40px 32px;gap:24px;overflow-y:auto}
+.preview-label{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:12px;text-align:center}
+.preview-card-wrap{display:flex;flex-direction:column;align-items:center;gap:8px}
+.preview-scale{font-size:11px;color:var(--muted);font-family:var(--mono)}
+
+/* Sample data note */
+.sample-note{font-size:11px;color:var(--muted);text-align:center;max-width:320px;line-height:1.5}
+
+/* Save bar */
+.save-bar{padding:14px 20px;border-top:1px solid var(--border-light);display:flex;justify-content:space-between;align-items:center;background:var(--surface);flex-shrink:0}
+.saved-msg{font-size:12px;color:#2f6f43;opacity:0;transition:opacity .3s}
+.saved-msg.show{opacity:1}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:var(--radius);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all .15s}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{opacity:.88}
+.btn-ghost{background:transparent;color:var(--muted);border-color:var(--border)}
+.btn-ghost:hover{color:var(--text);border-color:var(--text)}
+
+@media(max-width:800px){
+  .layout{grid-template-columns:1fr}
+  .preview-panel{display:none}
+}
+@media(max-width:640px){
+  header{height:auto;min-height:52px;flex-wrap:wrap;gap:8px 12px;padding:10px 14px}
+  .logo{font-size:11px;white-space:nowrap}
+  .back-btn{font-size:12px}
+  .ctrl-row{flex-wrap:wrap;gap:8px}
+  .save-bar{flex-wrap:wrap;gap:10px}
+}
+
+
+:root[data-theme="dark"]{--surface2:#2b2721}
+</style>
+</head>
+<body>
+
+<header>
+  <a href="/" class="logo"><span class="logo-dot" id="headerDot"></span><span id="headerName">YOUR SHOP / CARD EDITOR</span></a>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span id="theme-toggle"></span>
+    <a href="/" class="back-btn">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      Back
+    </a>
+  </div>
+</header>
+
+<div class="layout">
+  <!-- Left: controls -->
+  <div class="panel">
+    <div class="size-tabs">
+      <div class="size-tab" data-size="xs" onclick="switchSize('xs',this)">1.5×1<span class="dim">Bin Label</span></div>
+      <div class="size-tab active" data-size="sm" onclick="switchSize('sm',this)">1.75×¾<span class="dim">Tool Card</span></div>
+      <div class="size-tab" data-size="md" onclick="switchSize('md',this)">3×2<span class="dim">3×2</span></div>
+      <div class="size-tab" data-size="lg" onclick="switchSize('lg',this)">4×3<span class="dim">Large</span></div>
+      <div class="size-tab" data-size="full" onclick="switchSize('full',this)">3×5<span class="dim">Index Card</span></div>
+    </div>
+
+    <div class="controls" id="controlsPanel"></div>
+
+    <div class="save-bar">
+      <span class="saved-msg" id="savedMsg">✓ Saved</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="resetSize()">Reset to default</button>
+        <button class="btn btn-primary" onclick="saveAll()">Save changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: live preview -->
+  <div class="preview-panel">
+    <div class="preview-card-wrap">
+      <div class="preview-label" id="previewLabel">2 × 1 in preview</div>
+      <div id="previewCard"></div>
+      <div class="preview-scale" id="previewScale"></div>
+    </div>
+    <p class="sample-note">Preview uses sample data. Changes are reflected live and applied to all labels when you save.</p>
+  </div>
+</div>
+
+<script>
+// ── Default configs per size ──────────────────────────────
+const DEFAULTS = {
+  xs: {
+    showDescription:true, showSku:true, showPhoto:true, showQr:true,
+    showCellLocation:true, cellLocationFontSize:7,
+    descFontSize:8, skuFontSize:7, qrSize:52,
+  },
+  sm: {
+    showToolNum:true, showSku:true, showDescription:true,
+    showVendor:true, showBin:true, showQr:true,
+    headerBg:'#1a1916', descFontSize:9, toolNumFontSize:28, dividerWeight:2,
+  },
+  md: {
+    showHeader:true, showCellLabel:true,
+    showToolNum:true, showSku:true, showDescription:true,
+    showVendor:true, showPhoto:true, showReorderQty:true, showQr:true,
+    headerBg:'#1a1916', cellLabelFontSize:9, locationFontSize:12,
+    descFontSize:14, toolNumFontSize:10, skuFontSize:9,
+    qtyFontSize:13, qtyLabelSize:6, qrSize:72, headerHeight:26,
+  },
+  lg: {
+    showHeader:true, showCellLabel:true,
+    showToolNum:true, showSku:true, showDescription:true,
+    showVendor:true, showReorderQty:true, showPhoto:true, showQr:true,
+    headerBg:'#1a1916', cellLabelFontSize:11, locationFontSize:15,
+    descFontSize:18, toolNumFontSize:13, skuFontSize:12,
+    qtyFontSize:16, qtyLabelSize:7, qrSize:112, headerHeight:32,
+  },
+  full: {
+    showHeader:true, showCellLabel:true,
+    showToolNum:true, showSku:true, showDescription:true,
+    showVendorBox:true, showLocationBox:true, showReorderQtyBox:true,
+    showPhoto:true, showQr:true,
+    headerBg:'#1a1916', cellLabelFontSize:14, locationFontSize:13, locationBoxFontSize:13,
+    descFontSize:18, toolNumFontSize:11, skuFontSize:11,
+    qtyFontSize:20, qtyLabelSize:7, qrSize:140, headerHeight:36,
+  }
+};
+
+const HEADER_COLORS = ['#1a1916','#1a4fa8','#1e6b3e','#9b2020','#7c3aed','#b45309','#ffffff'];
+
+let configs = {};
+let currentSize = 'sm';
+
+// Sample item for preview
+const SAMPLE = {
+  description: 'T42 - 6mm 3 Flute End Mill',
+  sku: '03-1006',
+  supplier: 'Haas',
+  itemType: 'flat end mill (aluminum)',
+  bin: 'A-03',
+  minStock: 2,
+  minUnit: 'pcs',
+  reorderQty: 1,
+  reorderUnit: 'ea',
+  category: '#1a7a3a',
+  cellLabel: 'TOOLROOM A',
+  photo: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjAiIGhlaWdodD0iMTIwIiB2aWV3Qm94PSIwIDAgMTIwIDEyMCI+PHJlY3Qgd2lkdGg9IjEyMCIgaGVpZ2h0PSIxMjAiIGZpbGw9IiNmMGVkZTgiLz48cmVjdCB4PSIyMCIgeT0iMjAiIHdpZHRoPSI4MCIgaGVpZ2h0PSI4MCIgcng9IjYiIGZpbGw9IiNkOGQ1Y2YiLz48dGV4dCB4PSI2MCIgeT0iNjYiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjExIiBmaWxsPSIjODg4Ij5waG90bzwvdGV4dD48L3N2Zz4=',
+};
+const SAMPLE_QR = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIQAAACECAYAAABRRIOnAAAAAXNSR0IArs4c6QAABcpJREFUeF7t3UFu4zAMBdC5/6GnWBRoiwLJkPQj3HVizJDSE2XHj8fj8fj1eDweR/8dAQKBIwIECASuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQLgQIEC4ECBAuBAgQIHAl8Afh9wMBaWStoAAAAABJRU5ErkJggg==';
+
+function loadConfigs() {
+  const saved = JSON.parse(localStorage.getItem('kanban_card_configs') || '{}');
+  configs = {};
+  ['xs','sm','md','lg','full'].forEach(s => {
+    // Deep merge: start from DEFAULTS, overlay saved values
+    // This ensures any new slider key always has a valid default
+    const merged = Object.assign({}, DEFAULTS[s]);
+    const savedSize = saved[s] || {};
+    Object.keys(savedSize).forEach(k => {
+      if (savedSize[k] !== undefined) merged[k] = savedSize[k];
+    });
+    configs[s] = merged;
+  });
+}
+
+function saveAll() {
+  localStorage.setItem('kanban_card_configs', JSON.stringify(configs));
+  const msg = document.getElementById('savedMsg');
+  msg.classList.add('show');
+  setTimeout(() => msg.classList.remove('show'), 2000);
+}
+
+function resetSize() {
+  configs[currentSize] = Object.assign({}, DEFAULTS[currentSize]);
+  renderControls();
+  renderPreview();
+}
+
+function switchSize(size, el) {
+  currentSize = size;
+  document.querySelectorAll('.size-tab').forEach(t => t.classList.toggle('active', t.dataset.size === size));
+  renderControls();
+  renderPreview();
+}
+
+// ── Control renderers ──────────────────────────────────────
+function renderControls() {
+  const c = configs[currentSize];
+  const panel = document.getElementById('controlsPanel');
+
+  const toggle = (key, label, sub='') => `
+    <div class="ctrl-row">
+      <div class="ctrl-label">${label}${sub?`<div class="ctrl-sub">${sub}</div>`:''}</div>
+      <div class="toggle-wrap" onclick="toggle('${key}')">
+        <div class="toggle-track ${c[key]?'on':''}" id="tgl-${key}"><div class="toggle-thumb"></div></div>
+      </div>
+    </div>`;
+
+  const slider = (key, label, min, max, unit='px', sub='') => {
+    const val = c[key] !== undefined ? c[key] : min;
+    return `
+    <div class="ctrl-row">
+      <div class="ctrl-label">${label}${sub?`<div class="ctrl-sub">${sub}</div>`:''}</div>
+      <div class="slider-wrap">
+        <input type="range" min="${min}" max="${max}" value="${val}" oninput="slide('${key}',this.value)">
+        <span class="slider-val" id="sv-${key}">${val}${unit}</span>
+      </div>
+    </div>`;
+  };
+
+  const colorPicker = (key, label) => `
+    <div class="ctrl-row" style="flex-wrap:wrap;gap:6px">
+      <div class="ctrl-label" style="width:100%">${label}</div>
+      <div class="color-row" style="padding:0">
+        ${HEADER_COLORS.map(col => `
+          <div class="color-swatch ${c[key]===col?'active':''}" style="background:${col};${col==='#ffffff'?'border:1px solid var(--border);':''}" onclick="pickColor('${key}','${col}','${label}')" title="${col}"></div>
+        `).join('')}
+        <input type="color" class="color-input" value="${c[key]||'#1a1916'}" oninput="pickColor('${key}',this.value,'${label}')">
+      </div>
+    </div>`;
+
+  let html = '';
+
+  if (currentSize === 'xs') {
+    html += `
+    <div class="section"><div class="section-title">Fields</div>
+      ${toggle('showCellLocation','Cell / Location strip','Colored header bar')}
+      ${toggle('showDescription','Description','')}
+      ${toggle('showSku','Part # / SKU','')}
+      ${toggle('showPhoto','Item photo','Bottom left')}
+      ${toggle('showQr','QR code','Bottom right')}
+    </div>
+    <div class="section"><div class="section-title">Sizes</div>
+      ${slider('cellLocationFontSize','Cell / Location text',5,11)}
+      ${slider('descFontSize','Description',6,16)}
+      ${slider('skuFontSize','SKU',5,12)}
+      ${slider('qrSize','QR code',30,70,'px')}
+    </div>`;
+  }
+
+  if (currentSize === 'sm') {
+    html += `
+    <div class="section"><div class="section-title">Fields</div>
+      ${toggle('showToolNum','Tool number','Large identifier on left')}
+      ${toggle('showSku','Part # / SKU','Below tool number')}
+      ${toggle('showDescription','Description','Main text area')}
+      ${toggle('showVendor','Vendor','Bottom strip')}
+      ${toggle('showBin','Location / Bin','Bottom strip')}
+      ${toggle('showQr','QR code','Full height right column')}
+    </div>
+    <div class="section"><div class="section-title">Font Sizes</div>
+      ${slider('toolNumFontSize','Tool number',14,48)}
+      ${slider('descFontSize','Description',6,16)}
+      ${slider('skuFontSize','SKU / part #',6,12)}
+      ${slider('vendorFontSize','Vendor / bin',5,11)}
+    </div>
+    <div class="section"><div class="section-title">Layout</div>
+      ${slider('dividerWeight','Divider line weight',1,6,'px')}
+      ${slider('qrSize','QR code size',60,92,'px')}
+      ${slider('leftColWidth','Left column width',44,90,'px')}
+    </div>
+    <div class="section"><div class="section-title">Print — QL-800 · DK-2205</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.6;padding:4px 0">
+        Black on white 2.4" continuous tape. No border — tape edge is boundary. Colors print as black.
+      </div>
+    </div>`;
+  }
+
+  if (currentSize === 'md') {
+    html += `
+    <div class="section"><div class="section-title">Fields</div>
+      ${toggle('showHeader','Header bar','Cell / Location + bin')}
+      ${toggle('showCellLabel','Cell label in header','Category / Cell name')}
+      ${toggle('showToolNum','Tool number','')}
+      ${toggle('showSku','Part # / SKU','')}
+      ${toggle('showDescription','Description','')}
+      ${toggle('showVendor','Vendor','')}
+      ${toggle('showPhoto','Item photo','Left panel')}
+      ${toggle('showReorderQty','Min / reorder qty','')}
+      ${toggle('showQr','QR code','')}
+    </div>
+    <div class="section"><div class="section-title">Font Sizes</div>
+      ${slider('cellLabelFontSize','Cell label',7,14)}
+      ${slider('locationFontSize','Location / Bin',8,18)}
+      ${slider('toolNumFontSize','Tool number',10,28)}
+      ${slider('skuFontSize','SKU / part #',8,16)}
+      ${slider('descFontSize','Description',7,16)}
+      ${slider('vendorFontSize','Vendor',6,12)}
+      ${slider('qtyFontSize','Qty numbers',10,22)}
+      ${slider('qtyLabelSize','Qty label text',5,11)}
+    </div>
+    <div class="section"><div class="section-title">Layout</div>
+      ${slider('qrSize','QR code size',48,120,'px')}
+      ${slider('headerHeight','Header height',18,36,'px')}
+      ${slider('qtyBorderWeight','Qty box border',1,3,'px')}
+    </div>
+    <div class="section"><div class="section-title">Header Style</div>
+      ${colorPicker('headerBg','Header bar color')}
+      ${slider('headerFontSize','Header text size',7,18)}
+      <div class="ctrl-row">
+        <div class="ctrl-label">Header font<div class="ctrl-sub">Shop name / logo text</div></div>
+        <select onchange="selectFont('headerFontFamily',this.value)" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:var(--sans);font-size:12px;background:var(--surface);color:var(--text);outline:none">
+          <option value="mono" ${c.headerFontFamily==='mono'||!c.headerFontFamily?'selected':''}>Monospace</option>
+          <option value="sans" ${c.headerFontFamily==='sans'?'selected':''}>Sans-serif</option>
+          <option value="serif" ${c.headerFontFamily==='serif'?'selected':''}>Serif</option>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-label">Header weight</div>
+        <select onchange="selectFont('headerFontWeight',parseInt(this.value))" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:var(--sans);font-size:12px;background:var(--surface);color:var(--text);outline:none">
+          <option value="300" ${c.headerFontWeight===300?'selected':''}>Light</option>
+          <option value="400" ${c.headerFontWeight===400?'selected':''}>Regular</option>
+          <option value="500" ${(c.headerFontWeight===500||!c.headerFontWeight)?'selected':''}>Medium</option>
+          <option value="600" ${c.headerFontWeight===600?'selected':''}>Semibold</option>
+          <option value="700" ${c.headerFontWeight===700?'selected':''}>Bold</option>
+        </select>
+      </div>
+    </div>`;
+  }
+
+  if (currentSize === 'lg') {
+    html += `
+    <div class="section"><div class="section-title">Fields</div>
+      ${toggle('showHeader','Header bar','Cell / Location + bin')}
+      ${toggle('showCellLabel','Cell label in header','Category / Cell name')}
+      ${toggle('showToolNum','Tool number','')}
+      ${toggle('showDescription','Description','Large headline')}
+      ${toggle('showSku','Part # / SKU','')}
+      ${toggle('showVendor','Vendor','')}
+      ${toggle('showPhoto','Item photo','Right column')}
+      ${toggle('showReorderQty','Min / reorder qty','')}
+      ${toggle('showQr','QR code','')}
+    </div>
+    <div class="section"><div class="section-title">Font Sizes</div>
+      ${slider('cellLabelFontSize','Cell label',8,16)}
+      ${slider('locationFontSize','Location / Bin',10,22)}
+      ${slider('toolNumFontSize','Tool number',9,20)}
+      ${slider('descFontSize','Description',12,28)}
+      ${slider('skuFontSize','SKU / part #',8,16)}
+      ${slider('vendorFontSize','Vendor / info',8,14)}
+      ${slider('qtyFontSize','Qty numbers',12,24)}
+      ${slider('qtyLabelSize','Qty label text',5,11)}
+    </div>
+    <div class="section"><div class="section-title">Layout</div>
+      ${slider('qrSize','QR code size',64,150,'px')}
+      ${slider('headerHeight','Header height',20,40,'px')}
+      ${slider('padding','Content padding',8,20,'px')}
+      ${slider('qtyBorderWeight','Qty box border',1,3,'px')}
+    </div>
+    <div class="section"><div class="section-title">Header Style</div>
+      ${colorPicker('headerBg','Header bar color')}
+      ${slider('headerFontSize','Header text size',7,18)}
+      <div class="ctrl-row">
+        <div class="ctrl-label">Header font<div class="ctrl-sub">Shop name / logo text</div></div>
+        <select onchange="selectFont('headerFontFamily',this.value)" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:var(--sans);font-size:12px;background:var(--surface);color:var(--text);outline:none">
+          <option value="mono" ${c.headerFontFamily==='mono'||!c.headerFontFamily?'selected':''}>Monospace</option>
+          <option value="sans" ${c.headerFontFamily==='sans'?'selected':''}>Sans-serif</option>
+          <option value="serif" ${c.headerFontFamily==='serif'?'selected':''}>Serif</option>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-label">Header weight</div>
+        <select onchange="selectFont('headerFontWeight',parseInt(this.value))" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:var(--sans);font-size:12px;background:var(--surface);color:var(--text);outline:none">
+          <option value="300" ${c.headerFontWeight===300?'selected':''}>Light</option>
+          <option value="400" ${c.headerFontWeight===400?'selected':''}>Regular</option>
+          <option value="500" ${(c.headerFontWeight===500||!c.headerFontWeight)?'selected':''}>Medium</option>
+          <option value="600" ${c.headerFontWeight===600?'selected':''}>Semibold</option>
+          <option value="700" ${c.headerFontWeight===700?'selected':''}>Bold</option>
+        </select>
+      </div>
+    </div>`;
+  }
+
+  if (currentSize === 'full') {
+    html += `
+    <div class="section"><div class="section-title">Fields</div>
+      ${toggle('showHeader','Header bar','Cell label + bin')}
+      ${toggle('showToolNum','Tool number','')}
+      ${toggle('showDescription','Description','Main headline')}
+      ${toggle('showSku','Part # / SKU','')}
+      ${toggle('showCellLabel','Cell label in header','Category / Cell name')}
+      ${toggle('showVendorBox','Vendor box','')}
+      ${toggle('showLocationBox','Location box','Cell + bin — prominent')}
+      ${toggle('showReorderQtyBox','Min / reorder qty box','')}
+      ${toggle('showPhoto','Item photo','If uploaded')}
+      ${toggle('showQr','QR code','')}
+    </div>
+    <div class="section"><div class="section-title">Font Sizes</div>
+      ${slider('cellLabelFontSize','Cell label (header)',7,14)}
+      ${slider('locationFontSize','Bin badge (header)',9,18)}
+      ${slider('locationBoxFontSize','Location box value',9,18)}
+      ${slider('toolNumFontSize','Tool number',8,18)}
+      ${slider('descFontSize','Description',12,28)}
+      ${slider('skuFontSize','SKU / part #',8,18)}
+      ${slider('infoFontSize','Info box labels',7,14)}
+      ${slider('qtyFontSize','Qty numbers',14,30)}
+      ${slider('qtyLabelSize','Qty label text',6,12)}
+    </div>
+    <div class="section"><div class="section-title">Layout</div>
+      ${slider('qrSize','QR code size',80,200,'px')}
+      ${slider('headerHeight','Header height',26,50,'px')}
+      ${slider('padding','Content padding',10,24,'px')}
+      ${slider('infoBoxPadding','Info box padding',4,14,'px')}
+    </div>
+    <div class="section"><div class="section-title">Header Style</div>
+      ${colorPicker('headerBg','Header bar color')}
+      ${slider('headerFontSize','Header text size',7,18)}
+      <div class="ctrl-row">
+        <div class="ctrl-label">Header font<div class="ctrl-sub">Shop name / logo text</div></div>
+        <select onchange="selectFont('headerFontFamily',this.value)" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:var(--sans);font-size:12px;background:var(--surface);color:var(--text);outline:none">
+          <option value="mono" ${c.headerFontFamily==='mono'||!c.headerFontFamily?'selected':''}>Monospace</option>
+          <option value="sans" ${c.headerFontFamily==='sans'?'selected':''}>Sans-serif</option>
+          <option value="serif" ${c.headerFontFamily==='serif'?'selected':''}>Serif</option>
+        </select>
+      </div>
+      <div class="ctrl-row">
+        <div class="ctrl-label">Header weight</div>
+        <select onchange="selectFont('headerFontWeight',parseInt(this.value))" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-family:var(--sans);font-size:12px;background:var(--surface);color:var(--text);outline:none">
+          <option value="300" ${c.headerFontWeight===300?'selected':''}>Light</option>
+          <option value="400" ${c.headerFontWeight===400?'selected':''}>Regular</option>
+          <option value="500" ${(c.headerFontWeight===500||!c.headerFontWeight)?'selected':''}>Medium</option>
+          <option value="600" ${c.headerFontWeight===600?'selected':''}>Semibold</option>
+          <option value="700" ${c.headerFontWeight===700?'selected':''}>Bold</option>
+        </select>
+      </div>
+    </div>`;
+  }
+
+  panel.innerHTML = html;
+}
+
+function toggle(key) {
+  configs[currentSize][key] = !configs[currentSize][key];
+  const track = document.getElementById('tgl-' + key);
+  if (track) track.classList.toggle('on', configs[currentSize][key]);
+  renderPreview();
+}
+
+function selectFont(key, val) {
+  configs[currentSize][key] = val;
+  renderPreview();
+  renderControls(); // re-render to update selected state
+}
+
+function slide(key, val) {
+  configs[currentSize][key] = parseInt(val);
+  const el = document.getElementById('sv-' + key);
+  if (el) el.textContent = val + 'px';
+  renderPreview();
+}
+function slideRaw(key, val) {
+  configs[currentSize][key] = parseInt(val);
+  const el = document.getElementById('sv-' + key);
+  if (el) el.textContent = val;
+  renderPreview();
+}
+
+function pickColor(key, val) {
+  configs[currentSize][key] = val;
+  document.querySelectorAll(`.color-swatch`).forEach(s => {
+    s.classList.toggle('active', s.style.background === val || s.title === val);
+  });
+  renderPreview();
+}
+
+// ── Preview renderer ───────────────────────────────────────
+function renderPreview() {
+  const sizes = {xs:[144,96,'1.5×1 in'],sm:[168,72,'1.75×0.75 in'],md:[288,144,'3×2 in'],lg:[384,288,'4×3 in'],full:[288,480,'3×5 in']};
+  const [w,h,label] = sizes[currentSize];
+  document.getElementById('previewLabel').textContent = label + ' preview';
+
+  // Scale to fit preview area nicely
+  const maxW = 420, maxH = 500;
+  const scale = Math.min(maxW/w, maxH/h, 1.2);
+  const html = buildLabelWithConfig(SAMPLE, SAMPLE_QR, currentSize, configs[currentSize]);
+
+  document.getElementById('previewCard').innerHTML = `
+    <div style="transform:scale(${scale});transform-origin:top center;display:inline-block">
+      ${html}
+    </div>`;
+  document.getElementById('previewScale').textContent = `${Math.round(scale*100)}% scale`;
+}
+
+// ── Label builder that uses config ─────────────────────────
+function buildLabelWithConfig(item, qr, size, c) {
+  const shopName = (JSON.parse(localStorage.getItem('kanban_settings')||'{}').shopName || 'YOUR SHOP').toUpperCase();
+  const tMatch = item.description && item.description.match(/^(T\d+)\s*[-–]?\s*/i);
+  const toolNum = tMatch ? tMatch[1].toUpperCase() : null;
+  const descRest = tMatch ? item.description.slice(tMatch[0].length) : item.description;
+  const catLabel = item.cellLabel || '';
+  const hbg = (size !== 'sm' && item.category) ? item.category : (c.headerBg || '#1a1916');
+  const htext = isLight(hbg) ? '#1a1916' : '#ffffff';
+  const hTextMuted = isLight(hbg) ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.5)';
+
+  function isLight(hex) {
+    const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+    return (r*299+g*587+b*114)/1000 > 128;
+  }
+  const fontFamilies = {'mono':"'IBM Plex Mono',monospace",'sans':"'IBM Plex Sans',sans-serif",'serif':"Georgia,serif"};
+  const hdrFont = fontFamilies[c.headerFontFamily||'mono'] || fontFamilies['mono'];
+  const hdrFontSize = c.headerFontSize;
+  const hdrFontWeight = c.headerFontWeight || 500;
+  const shopLogo = (JSON.parse(localStorage.getItem('kanban_settings')||'{}').shopLogo) || null;
+
+  if (size === 'xs') {
+    const qs = c.qrSize || 52;
+    const clfs = c.cellLocationFontSize || 7;
+    const stripH = clfs + 7;
+    return `
+    <div style="width:144px;height:96px;background:#fff;border:1.5px solid #1a1916;font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column;overflow:hidden">
+      ${c.showCellLocation!==false&&(catLabel||item.bin)?`
+      <div style="background:${hbg};height:${stripH}px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:0 5px;gap:3px;overflow:hidden">
+        <span style="font-size:${clfs}px;color:${htext};font-weight:700;letter-spacing:.05em;font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${esc(catLabel||'')}</span>
+        ${item.bin?`<span style="font-size:${clfs}px;color:${htext};font-weight:700;font-family:'IBM Plex Mono',monospace;flex-shrink:0;background:rgba(255,255,255,.18);padding:0 4px;border-radius:2px">${esc(item.bin)}</span>`:''}
+      </div>`:''}
+      <div style="flex:1;padding:3px 6px;display:flex;flex-direction:column;justify-content:center;overflow:hidden;min-height:0">
+        ${c.showDescription!==false?`<div style="font-size:${c.descFontSize||8}px;font-weight:700;color:#000;line-height:1.2;font-family:'IBM Plex Sans',sans-serif;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word">${esc(descRest||item.description)}</div>`:''}
+        ${c.showSku!==false&&item.sku?`<div style="font-size:${c.skuFontSize||7}px;font-weight:600;color:#000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px">${esc(item.sku)}</div>`:''}
+      </div>
+      <div style="border-top:1px solid #1a1916;display:flex;align-items:stretch;flex-shrink:0;height:${qs+8}px">
+        ${c.showPhoto!==false&&item.photo?`
+        <div style="flex:1;border-right:1px solid #e8e5df;display:flex;align-items:center;justify-content:center;padding:3px;overflow:hidden">
+          <img src="${esc(item.photo)}" style="max-width:100%;max-height:${qs}px;object-fit:contain">
+        </div>`:''}
+        ${c.showQr!==false?`
+        <div style="width:${qs+8}px;flex-shrink:0;display:flex;align-items:center;justify-content:center;padding:3px">
+          <img src="${qr}" style="width:${qs}px;height:${qs}px;display:block">
+        </div>`:''}
+      </div>
+    </div>`;
+  }
+
+  if (size === 'sm') {
+    const lfs = c.toolNumFontSize || 28;
+    const divW = c.dividerWeight || 2;
+    const qrImgW = c.qrSize || 62;
+    const qrColW = qrImgW + 8; // 4px padding each side — column exactly fits QR
+    return `
+    <div class="label-sm-print" style="width:192px;min-height:72px;background:#fff;display:flex;align-items:stretch;font-family:'IBM Plex Mono',monospace;overflow:hidden">
+      <div style="flex:1;max-width:72px;min-width:0;display:flex;flex-direction:column;justify-content:flex-start;padding:4px 5px;gap:2px">
+        ${c.showToolNum!==false&&toolNum?`
+        <div style="font-size:${lfs}px;font-weight:700;color:#000;line-height:1;letter-spacing:-.02em;white-space:normal;word-break:break-all">${esc(toolNum)}</div>`:''}
+        ${c.showDescription!==false?`
+        <div style="font-size:${c.descFontSize||9}px;font-weight:600;color:#000;line-height:1.25;font-family:'IBM Plex Sans',sans-serif;word-break:break-word;white-space:normal">${esc(toolNum?descRest:item.description)}</div>`:''}
+        ${c.showSku!==false&&item.sku?`
+        <div style="font-size:8px;color:#000;white-space:normal;word-break:break-all;margin-top:1px">${esc(item.sku)}</div>`:''}
+        ${(c.showVendor!==false&&item.supplier)||(c.showBin!==false&&item.bin)?`
+        <div style="font-size:7px;color:#000;font-family:'IBM Plex Sans',sans-serif;white-space:normal;word-break:break-all;margin-top:1px">${
+          [c.showVendor!==false?item.supplier:'', c.showBin!==false?item.bin:''].filter(Boolean).join(' · ')
+        }</div>`:''}
+      </div>
+      ${c.showQr!==false?`
+      <div style="width:${qrColW}px;flex-shrink:0;border-left:${divW}px solid #000;display:flex;align-items:center;justify-content:flex-start;padding:4px 4px 4px 3px">
+        <img src="${qr}" style="width:${qrImgW}px;height:${qrImgW}px;display:block">
+      </div>`:''}
+    </div>`;
+  }
+
+  if (size === 'md') {
+    const qs = c.qrSize || 72;
+    const clfs = c.cellLabelFontSize || 9;
+    const lfs = c.locationFontSize || 12;
+    return `
+    <div style="width:288px;height:192px;background:#fff;border:2px solid #1a1916;font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column;overflow:hidden">
+      ${c.showHeader!==false?`
+      <div style="background:${hbg};padding:0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;height:${c.headerHeight||26}px;overflow:hidden">
+        ${shopLogo
+          ?`<img src="${shopLogo}" style="max-height:${(c.headerHeight||26)-6}px;max-width:80px;object-fit:contain;filter:${isLight(hbg)?'none':'brightness(0) invert(1)'}" onerror="this.style.display='none'">`
+          :(c.showCellLabel!==false&&catLabel
+            ?`<span style="font-size:${clfs}px;color:${htext};font-weight:700;letter-spacing:.06em;font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${esc(catLabel)}</span>`
+            :`<span style="font-size:${hdrFontSize||8}px;color:${hTextMuted};letter-spacing:.1em;font-family:${hdrFont};font-weight:${hdrFontWeight}">${shopName}</span>`)}
+        ${item.bin?`<span style="font-size:${lfs}px;color:${htext};font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:.04em;background:rgba(255,255,255,.18);padding:1px 8px;border-radius:3px;flex-shrink:0">${esc(item.bin)}</span>`:''}
+      </div>`:''}
+      <div style="flex:1;display:flex;overflow:hidden">
+        ${item.photo&&c.showPhoto!==false?`
+        <div style="width:108px;flex-shrink:0;border-right:1px solid #e8e5df;display:flex;align-items:center;justify-content:center;padding:6px;background:#fafafa">
+          <img src="${esc(item.photo)}" style="max-width:96px;max-height:100%;object-fit:contain">
+        </div>`:''}
+        <div style="flex:1;padding:8px 10px;display:flex;flex-direction:column;justify-content:space-between;min-width:0;overflow:hidden">
+          <div>
+            ${c.showToolNum!==false&&toolNum?`<div style="font-size:${c.toolNumFontSize||10}px;font-weight:700;color:#888;letter-spacing:.06em;margin-bottom:2px">${esc(toolNum)}</div>`:''}
+            ${c.showDescription!==false?`<div style="font-size:${c.descFontSize||14}px;font-weight:700;font-family:'IBM Plex Sans',sans-serif;line-height:1.25;color:#1a1916;word-break:break-word">${esc(descRest||item.description)}</div>`:''}
+            ${c.showSku!==false&&item.sku?`<div style="font-size:${c.skuFontSize||9}px;color:#555;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.sku)}</div>`:''}
+            ${c.showVendor!==false&&item.supplier?`<div style="font-size:8px;color:#888;font-family:'IBM Plex Sans',sans-serif;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.supplier)}</div>`:''}
+          </div>
+          <div style="display:flex;align-items:stretch;gap:4px;justify-content:flex-end;padding-right:6px">
+            ${c.showReorderQty!==false?`
+            <div style="border:${c.qtyBorderWeight||1.5}px solid #1a1916;border-radius:3px;padding:2px 5px;text-align:center;display:flex;flex-direction:column;justify-content:center">
+              <div style="font-size:${c.qtyLabelSize||6}px;letter-spacing:.06em;color:#888;font-family:'IBM Plex Mono',monospace">MIN</div>
+              <div style="font-size:${c.qtyFontSize||13}px;font-weight:700;color:#1a1916;line-height:1">${item.minStock||1}${item.minUnit?`<span style="font-size:7px;font-weight:400;color:#666;margin-left:1px">${esc(item.minUnit)}</span>`:''}</div>
+            </div>
+            <div style="border:${c.qtyBorderWeight||1.5}px solid #1a1916;border-radius:3px;padding:2px 5px;text-align:center;display:flex;flex-direction:column;justify-content:center">
+              <div style="font-size:${c.qtyLabelSize||6}px;letter-spacing:.06em;color:#888;font-family:'IBM Plex Mono',monospace">ORDER</div>
+              <div style="font-size:${c.qtyFontSize||13}px;font-weight:700;color:#1a1916;line-height:1">${item.reorderQty||1}${item.reorderUnit?`<span style="font-size:7px;font-weight:400;color:#666;margin-left:1px">${esc(item.reorderUnit)}</span>`:''}</div>
+            </div>`:''}
+            ${c.showQr!==false?`
+            <div style="display:flex;align-items:center">
+              <img src="${qr}" style="width:auto;height:100%;max-height:42px;display:block">
+            </div>`:''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  if (size === 'lg') {
+    const qs = c.qrSize || 112;
+    const photoSize = item.photo && c.showPhoto!==false ? Math.round(qs * 0.72) : 0;
+    const clfs = c.cellLabelFontSize || 11;
+    const lfs = c.locationFontSize || 15;
+    return `
+    <div style="width:384px;height:288px;background:#fff;border:2px solid #1a1916;font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column;overflow:hidden">
+      ${c.showHeader!==false?`
+      <div style="background:${hbg};padding:0 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-shrink:0;height:${c.headerHeight||32}px;overflow:hidden">
+        ${shopLogo
+          ?`<img src="${shopLogo}" style="max-height:${(c.headerHeight||32)-8}px;max-width:120px;object-fit:contain;filter:${isLight(hbg)?'none':'brightness(0) invert(1)'}">`
+          :(c.showCellLabel!==false&&catLabel
+            ?`<span style="font-size:${clfs}px;color:${htext};font-weight:700;letter-spacing:.06em;font-family:'IBM Plex Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${esc(catLabel)}</span>`
+            :`<span style="font-size:${hdrFontSize||9}px;color:${hTextMuted};letter-spacing:.1em;font-family:${hdrFont};font-weight:${hdrFontWeight}">${shopName}</span>`)}
+        ${item.bin?`<span style="font-size:${lfs}px;color:${htext};font-weight:700;font-family:'IBM Plex Mono',monospace;letter-spacing:.04em;background:rgba(255,255,255,.18);padding:2px 10px;border-radius:4px;flex-shrink:0">${esc(item.bin)}</span>`:''}
+      </div>`:''}
+      <div style="flex:1;display:flex;overflow:hidden">
+        <div style="flex:1;padding:${c.padding||12}px 14px;display:flex;flex-direction:column;justify-content:space-between;min-width:0;overflow:hidden">
+          <div>
+            ${c.showToolNum!==false&&toolNum?`<div style="font-size:${c.toolNumFontSize||11}px;font-weight:700;color:#000;letter-spacing:.08em;margin-bottom:3px">${esc(toolNum)}</div>`:''}
+            ${c.showDescription!==false?`<div style="font-size:${c.descFontSize||20}px;font-weight:700;font-family:'IBM Plex Sans',sans-serif;line-height:1.15;color:#1a1916;word-break:break-word">${esc(descRest||item.description)}</div>`:''}
+            ${c.showSku!==false&&item.sku?`<div style="font-size:${c.skuFontSize||11}px;color:#000;letter-spacing:.04em;margin-top:4px">${esc(item.supplier?item.supplier+' · ':'')}${esc(item.sku)}</div>`:''}
+          </div>
+          <div>
+            ${c.showReorderQty!==false?`
+            <div style="display:flex;gap:6px">
+              <div style="flex:1;border:${c.qtyBorderWeight||1.5}px solid #1a1916;border-radius:5px;padding:5px 8px;text-align:center">
+                <div style="font-size:${c.qtyLabelSize||7}px;letter-spacing:.09em;color:#000;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">MIN STOCK</div>
+                <div style="font-size:${c.qtyFontSize||18}px;font-weight:700;color:#1a1916;line-height:1">${item.minStock||1}${item.minUnit?`<span style="font-size:9px;font-weight:400;color:#666;margin-left:2px">${esc(item.minUnit)}</span>`:''}</div>
+              </div>
+              <div style="flex:1;border:${c.qtyBorderWeight||1.5}px solid #1a1916;border-radius:5px;padding:5px 8px;text-align:center">
+                <div style="font-size:${c.qtyLabelSize||7}px;letter-spacing:.09em;color:#000;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">REORDER QTY</div>
+                <div style="font-size:${c.qtyFontSize||18}px;font-weight:700;color:#1a1916;line-height:1">${item.reorderQty||1}${item.reorderUnit?`<span style="font-size:9px;font-weight:400;color:#666;margin-left:2px">${esc(item.reorderUnit)}</span>`:''}</div>
+              </div>
+            </div>`:''}
+          </div>
+        </div>
+        ${c.showQr!==false?`
+        <div style="width:${qs+16}px;flex-shrink:0;border-left:1.5px solid #e8e5df;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:10px 8px">
+          ${c.showPhoto!==false&&item.photo?`<img src="${esc(item.photo)}" style="width:${photoSize}px;height:${photoSize}px;object-fit:contain;border:1px solid #eee;border-radius:4px">`:'' }
+          <img src="${qr}" style="width:${qs}px;height:${qs}px;border:2px solid #1a1916;padding:3px">
+          <div style="font-size:7px;color:#000;letter-spacing:.07em;font-family:'IBM Plex Sans',sans-serif">SCAN TO REORDER</div>
+        </div>`:''}
+      </div>
+    </div>`;
+  }
+
+  // FULL — 3"×5" Index Card (288×480px)
+  const qs = c.qrSize || 140;
+  const clfs = c.cellLabelFontSize || 9;
+  const lfs = c.locationFontSize || 13;
+  const lbfs = c.locationBoxFontSize || 13;
+  return `
+  <div style="width:288px;height:480px;background:#fff;border:2px solid #1a1916;font-family:'IBM Plex Mono',monospace;display:flex;flex-direction:column;overflow:hidden">
+    ${c.showHeader!==false?`
+    <div style="background:${hbg};padding:0 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-shrink:0;height:${c.headerHeight||36}px;overflow:hidden">
+      ${shopLogo?`<img src="${shopLogo}" style="max-height:${Math.round((c.headerHeight||36)-10)}px;max-width:80px;object-fit:contain;filter:${isLight(hbg)?'none':'brightness(0) invert(1)'}" onerror="this.style.display='none'">`:``}
+      ${c.showCellLabel!==false&&catLabel
+        ?`<span style="font-size:${clfs}px;color:${htext};font-weight:700;letter-spacing:.07em;font-family:'IBM Plex Mono',monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;${shopLogo?'text-align:right':''} ">${esc(catLabel)}</span>`
+        :(!shopLogo?`<span style="font-size:${hdrFontSize||8}px;color:${hTextMuted};letter-spacing:.12em;font-weight:${hdrFontWeight};font-family:${hdrFont}">${shopName} · KANBAN</span>`:``)}
+    </div>`:``}
+    <div style="flex:1;padding:${c.padding||14}px;display:flex;flex-direction:column;overflow:hidden">
+      <div style="margin-bottom:10px">
+        ${c.showToolNum!==false&&toolNum?`<div style="font-size:11px;font-weight:700;color:${hbg};letter-spacing:.08em;margin-bottom:3px">${esc(toolNum)}</div>`:''}
+        ${c.showDescription!==false?`<div style="font-size:${c.descFontSize||18}px;font-weight:700;font-family:'IBM Plex Sans',sans-serif;line-height:1.2;color:#1a1916;word-break:break-word">${esc(descRest||item.description)}</div>`:''}
+        ${c.showSku!==false?`<div style="font-size:${c.skuFontSize||11}px;color:#000;letter-spacing:.05em;margin-top:5px">${esc(item.supplier||'')}${item.supplier&&item.sku?' · ':''}${esc(item.sku||'')}</div>`:''}
+      </div>
+      <div style="height:1px;background:#e8e5df;margin-bottom:10px;flex-shrink:0"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;font-family:'IBM Plex Sans',sans-serif;flex-shrink:0">
+        ${c.showVendorBox!==false?`<div style="background:#f8f6f2;padding:${c.infoBoxPadding||6}px ${(c.infoBoxPadding||6)+3}px;border-radius:4px"><div style="font-size:${c.infoFontSize?c.infoFontSize-3:7}px;letter-spacing:.08em;color:#888;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">VENDOR</div><div style="font-size:11px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(item.supplier||'—')}</div></div>`:'<div></div>'}
+        ${c.showLocationBox!==false?`
+        <div style="background:#f8f6f2;padding:${c.infoBoxPadding||6}px ${(c.infoBoxPadding||6)+3}px;border-radius:4px">
+          <div style="font-size:${c.infoFontSize?c.infoFontSize-3:7}px;letter-spacing:.08em;color:#888;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">LOCATION</div>
+          <div style="font-size:${lbfs}px;font-weight:700;color:#1a1916;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'IBM Plex Mono',monospace">${esc(item.bin||'—')}</div>
+        </div>`:'<div></div>'}
+        ${c.showReorderQtyBox!==false?`
+        <div style="grid-column:span 2;border:1.5px solid #1a1916;border-radius:4px;padding:8px 10px;display:flex;align-items:stretch;justify-content:space-around;gap:0">
+          <div style="flex:1;text-align:center">
+            <div style="font-size:${c.qtyLabelSize||7}px;letter-spacing:.1em;color:#000;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">MIN STOCK</div>
+            <div style="font-size:${c.qtyFontSize||20}px;font-weight:700;color:#1a1916;line-height:1">${item.minStock||1}${item.minUnit?`<span style="font-size:9px;font-weight:400;color:#666;margin-left:3px">${esc(item.minUnit)}</span>`:''}</div>
+          </div>
+          <div style="width:1px;background:#e8e5df;margin:0 8px"></div>
+          <div style="flex:1;text-align:center">
+            <div style="font-size:${c.qtyLabelSize||7}px;letter-spacing:.1em;color:#000;margin-bottom:2px;font-family:'IBM Plex Mono',monospace">REORDER QTY</div>
+            <div style="font-size:${c.qtyFontSize||20}px;font-weight:700;color:#1a1916;line-height:1">${item.reorderQty||1}${item.reorderUnit?`<span style="font-size:9px;font-weight:400;color:#666;margin-left:3px">${esc(item.reorderUnit)}</span>`:''}</div>
+          </div>
+        </div>`:''}
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:0 8px;overflow:hidden">
+        ${c.showPhoto!==false&&item.photo?`
+        <img src="${esc(item.photo)}" style="width:${Math.min(qs,c.showQr!==false?118:248)}px;height:${Math.min(qs,c.showQr!==false?118:248)}px;object-fit:contain;border:1px solid #e8e5df;border-radius:4px;flex-shrink:0">`:''} 
+        ${c.showQr!==false?`
+        <div style="display:flex;flex-direction:column;align-items:center;flex-shrink:0">
+          <img src="${qr}" style="width:${Math.min(qs,c.showPhoto!==false&&item.photo?118:248)}px;height:${Math.min(qs,c.showPhoto!==false&&item.photo?118:248)}px;border:2px solid #1a1916;padding:4px">
+          <div style="font-size:7px;color:#000;margin-top:5px;letter-spacing:.08em;font-family:'IBM Plex Sans',sans-serif">SCAN TO REORDER</div>
+        </div>`:''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// Apply global settings
+function applyGlobalSettings() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.accentColor) document.documentElement.style.setProperty('--accent', s.accentColor);
+  const name = (s.shopName||'YOUR SHOP').toUpperCase();
+  document.getElementById('headerDot').style.background = s.accentColor||'#c4351c';
+  document.getElementById('headerName').textContent = name + ' / CARD EDITOR';
+}
+
+applyGlobalSettings();
+loadConfigs();
+renderControls();
+renderPreview();
+// Show dev indicator in tab title
+fetch('/api/env').then(r=>r.json()).then(env=>{
+  if (env.dev) document.title = '⚠ DEV — ' + document.title;
+}).catch(()=>{});
+
+// Update favicon from shop logo
+function updateFavicon() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.shopLogo) {
+    const link = document.getElementById('favicon');
+    if (link) link.href = s.shopLogo;
+  }
+}
+updateFavicon();
+</script>
+<script>window.SHOP_APP_ID = "kanban";</script>
+</body>
+</html>

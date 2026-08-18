@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" href="/favicon.png"><link id="favicon" rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KANBAN · Settings</title>
+<link rel="stylesheet" href="/theme-tokens.css">
+<!-- Blocking on purpose: deferred, the page paints light then flips. -->
+<script src="/theme.js"></script>
+<script>
+/* The accent used to default to blue, and settings writes whatever the
+ * picker shows on every save — so browsers that never chose a colour
+ * still have that blue stored, where an inline style beats the sheet.
+ * Retiring exactly the old default lets the house rust through; any
+ * other value was a deliberate choice and is left alone. */
+try{var _t=JSON.parse(localStorage.getItem("kanban_settings")||"{}");
+if(_t.accentColor==="#1a4fa8"){delete _t.accentColor;
+localStorage.setItem("kanban_settings",JSON.stringify(_t));}}catch(e){}
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:var(--font-size);line-height:1.5;transition:background .2s,color .2s}
+header{background:var(--surface);border-bottom:1px solid var(--line);color:var(--ink);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100}
+.logo{font-family:var(--mono);font-size:13px;letter-spacing:.08em;font-weight:500;display:flex;align-items:center;gap:10px}
+.logo-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.back-btn{display:flex;align-items:center;gap:6px;color:var(--ink-soft);text-decoration:none;font-size:13px;transition:color .15s}
+.back-btn:hover{color:var(--ink)}
+.main{max-width:680px;margin:0 auto;padding:32px 24px}
+.page-title{font-size:20px;font-weight:600;margin-bottom:4px}
+.page-sub{color:var(--muted);font-size:13px;margin-bottom:32px}
+.settings-section{margin-bottom:32px}
+.section-title{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--border-light)}
+.setting-row{display:flex;align-items:center;justify-content:space-between;padding:14px 0;border-bottom:1px solid var(--border-light);gap:20px}
+.setting-row:last-child{border-bottom:none}
+.setting-info{flex:1}
+.setting-label{font-size:14px;font-weight:500;margin-bottom:2px}
+.setting-desc{font-size:12px;color:var(--muted)}
+.setting-control{flex-shrink:0}
+input[type=text],input[type=color],select{padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:13px;background:var(--surface);color:var(--text);outline:none;transition:border-color .15s}
+input[type=text]:focus,select:focus{border-color:var(--text)}
+input[type=color]{padding:2px 4px;width:48px;height:34px;cursor:pointer;border-radius:var(--radius)}
+/* Toggle */
+.toggle-wrap{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.toggle-track{width:40px;height:22px;border-radius:11px;background:var(--border);position:relative;transition:background .2s;flex-shrink:0}
+.toggle-track.on{background:var(--accent)}
+.toggle-thumb{width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;top:2px;left:2px;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle-track.on .toggle-thumb{transform:translateX(18px)}
+/* Preview card */
+.preview-card{background:var(--surface);border:1px solid var(--border-light);border-radius:8px;padding:20px;margin-top:16px;box-shadow:var(--shadow)}
+.preview-label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:12px}
+.preview-logo{font-family:var(--mono);font-weight:500;letter-spacing:.08em}
+.color-swatch{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.swatch{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:border-color .15s}
+.swatch.active{border-color:var(--text)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 20px;border-radius:var(--radius);font-family:var(--sans);font-size:13px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all .15s}
+.btn-primary{background:var(--text);color:var(--paper);border-color:var(--text)}
+.btn-primary:hover{opacity:.85}
+.save-bar{position:sticky;bottom:0;background:var(--surface);border-top:1px solid var(--border-light);padding:16px 24px;display:flex;justify-content:space-between;align-items:center;margin:0 -24px;box-shadow:0 -4px 12px rgba(0,0,0,.06)}
+.save-bar-note{font-size:12px;color:var(--muted)}
+.saved-msg{font-size:12px;color:#2f6f43;opacity:0;transition:opacity .3s}
+.saved-msg.show{opacity:1}
+@media (max-width: 640px) {
+  header { height: auto; min-height: 52px; flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; }
+  .logo { font-size: 11px; white-space: nowrap; }
+  .main { padding: 20px 14px; }
+  .setting-row { flex-direction: column; align-items: stretch; gap: 10px; }
+  .setting-row > * { min-width: 0; max-width: 100%; }
+  .save-bar { margin: 0 -14px; padding: 14px; flex-wrap: wrap; gap: 10px; }
+  table { display: block; overflow-x: auto; }
+}
+
+
+:root[data-theme="dark"]{--surface2:#2b2721}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><span class="logo-dot" id="headerDot"></span><span id="headerName">YOUR SHOP / INVENTORY</span></div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span id="theme-toggle"></span>
+    <a href="/" class="back-btn">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+      Back
+    </a>
+  </div>
+</header>
+
+<div class="main">
+  <div class="page-title">Settings</div>
+  <div class="page-sub">Customize the appearance and defaults of your inventory system</div>
+
+  <!-- Branding -->
+  <div class="settings-section">
+    <div class="section-title">Branding</div>
+    <div class="setting-row">
+      <div class="setting-info">
+        <div class="setting-label">Shop name</div>
+        <div class="setting-desc">Shown in the header and on printed labels</div>
+      </div>
+      <div class="setting-control">
+        <input type="text" id="shopName" placeholder="YOUR SHOP" style="width:220px">
+      </div>
+    </div>
+    <div class="setting-row" style="align-items:flex-start;padding-top:16px;padding-bottom:16px">
+      <div class="setting-info">
+        <div class="setting-label">Shop logo</div>
+        <div class="setting-desc">Shown in the header bar of printed labels (md, lg, 3×5). PNG or JPG, ~200×60px recommended.</div>
+      </div>
+      <div class="setting-control" style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+        <div id="logoPreviewWrap" style="display:none;position:relative">
+          <img id="logoPreview" style="max-width:160px;max-height:40px;object-fit:contain;border:1px solid var(--border-light);border-radius:4px;background:#fff;padding:4px">
+          <button onclick="clearLogo()" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:#9b2020;color:#fff;border:none;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
+        </div>
+        <label style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1px solid var(--border);border-radius:var(--radius);cursor:pointer;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text)">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          Upload logo
+          <input type="file" id="logoFile" accept="image/*" style="display:none" onchange="handleLogoUpload(this)">
+        </label>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div class="setting-info">
+        <div class="setting-label">Accent color</div>
+        <div class="setting-desc">Used for links, cart button, and status highlights</div>
+      </div>
+      <div class="setting-control">
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="color" id="accentColor" value="#c4351c">
+          <div class="color-swatch" id="colorSwatches"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Appearance -->
+  <div class="settings-section">
+    <div class="section-title">Appearance</div>
+    <div class="setting-row">
+      <div class="setting-info">
+        <div class="setting-label">Dark mode</div>
+        <div class="setting-desc">Dark background throughout the app</div>
+      </div>
+      <div class="setting-control">
+        <div class="toggle-wrap" onclick="toggleDark()">
+          <div class="toggle-track" id="darkToggle"><div class="toggle-thumb"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div class="setting-info">
+        <div class="setting-label">Font size</div>
+        <div class="setting-desc">Base size for the inventory table and UI</div>
+      </div>
+      <div class="setting-control">
+        <select id="fontSize">
+          <option value="13px">Small (13px)</option>
+          <option value="14px" selected>Default (14px)</option>
+          <option value="15px">Medium (15px)</option>
+          <option value="16px">Large (16px)</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cells -->
+  <div class="settings-section">
+    <div class="section-title">Cells &amp; Subtypes</div>
+    <div class="setting-row">
+      <div class="setting-info">
+        <div class="setting-label">Cell manager</div>
+        <div class="setting-desc">Define physical cells, subtypes, and colors. Card headers show the cell label.</div>
+      </div>
+      <div class="setting-control">
+        <a href="/cells" class="btn btn-ghost" style="font-size:13px;padding:7px 14px;text-decoration:none">Manage cells →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Label defaults -->
+  <div class="settings-section">
+    <div class="section-title">Label Defaults</div>
+    <div class="setting-row">
+      <div class="setting-info">
+        <div class="setting-label">Default label size</div>
+        <div class="setting-desc">Pre-selected size when opening the print dialog</div>
+      </div>
+      <div class="setting-control">
+        <select id="defaultLabelSize">
+          <option value="sm">Small — 2×1 in</option>
+          <option value="md">Medium — 3×2 in</option>
+          <option value="lg">Large — 4×3 in</option>
+          <option value="full">Full Card — 4×6 in</option>
+        </select>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div class="setting-info">
+        <div class="setting-label">Card layout editor</div>
+        <div class="setting-desc">Customize fields, font sizes, and colors for each label size</div>
+      </div>
+      <div class="setting-control">
+        <a href="/card-editor.html" class="btn btn-ghost" style="font-size:13px;padding:7px 14px;text-decoration:none">Open editor →</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- AI / Screenshot Import -->
+  <div class="settings-section">
+    <div class="section-title">AI Screenshot Import</div>
+    <div class="setting-row">
+      <div class="setting-info">
+        <div class="setting-label">Anthropic API Key</div>
+        <div class="setting-desc">Enables pasting screenshots into the Add Item form to auto-fill product info from any supplier. Get a key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent)">console.anthropic.com</a></div>
+      </div>
+      <div class="setting-control" style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;max-width:300px">
+        <span id="apiKeyStatus" style="font-size:13px;font-weight:600;color:var(--muted)">Checking…</span>
+        <span id="apiKeyHint" style="font-size:11px;color:var(--muted);text-align:right;line-height:1.5">The key is stored as a Cloudflare secret, not in the app. To set it, run:<br><code style="font-family:var(--mono);font-size:10.5px;background:var(--bg);padding:2px 5px;border-radius:4px;display:inline-block;margin-top:3px">wrangler pages secret put ANTHROPIC_API_KEY</code></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Export -->
+  <div class="settings-section">
+    <div class="section-title">Export Inventory</div>
+    <div class="setting-row">
+      <div class="setting-info">
+        <div class="setting-label">Download inventory data</div>
+        <div class="setting-desc">Export all items for backup, sharing, or spreadsheet use</div>
+      </div>
+      <div class="setting-control">
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="exportInventory('csv')" style="font-size:13px;padding:7px 14px">CSV</button>
+          <button class="btn btn-ghost" onclick="exportInventory('json')" style="font-size:13px;padding:7px 14px">JSON</button>
+          <button class="btn btn-ghost" onclick="exportInventory('pdf')" style="font-size:13px;padding:7px 14px">PDF</button>
+        </div>
+      </div>
+    </div>
+    <div class="setting-row">
+      <div class="setting-info">
+        <div class="setting-label">Full system backup</div>
+        <div class="setting-desc">Downloads a complete backup including inventory, categories, item types, order queue, and receiving history. Backups also run automatically every 24 hours and are saved to the <code style="font-family:var(--mono);font-size:11px;background:var(--bg);padding:1px 5px;border-radius:3px">backups/</code> folder.</div>
+      </div>
+      <div class="setting-control">
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost" onclick="downloadBackup()" style="font-size:13px;padding:7px 14px">⬇ Download Backup</button>
+          <button class="btn btn-ghost" onclick="runBackupNow()" style="font-size:13px;padding:7px 14px">Run Now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- URL Import -->
+  <div class="settings-section">
+    <div class="section-title">Import from URL</div>
+    <div class="setting-row" style="align-items:flex-start;padding-top:16px;padding-bottom:16px">
+      <div class="setting-info">
+        <div class="setting-label">McMaster-Carr or Amazon</div>
+        <div class="setting-desc">Paste a product URL and we'll pull the description, part number, price, and photo automatically</div>
+      </div>
+      <div class="setting-control" style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;min-width:280px">
+        <input type="url" id="importUrl" placeholder="https://www.mcmaster.com/..." style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);outline:none">
+        <div style="display:flex;gap:8px;width:100%">
+          <button class="btn btn-ghost" onclick="importFromUrl('mcmaster')" style="flex:1;font-size:13px;padding:7px 10px">McMaster</button>
+          <button class="btn btn-ghost" onclick="importFromUrl('amazon')" style="flex:1;font-size:13px;padding:7px 10px">Amazon</button>
+          <button class="btn btn-primary" onclick="importFromUrl('auto')" style="flex:1;font-size:13px;padding:7px 10px">Auto-detect</button>
+        </div>
+        <div id="importStatus" style="font-size:12px;color:var(--muted);width:100%;min-height:16px"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="settings-section">
+    <div class="section-title">Preview</div>
+    <div class="preview-card">
+      <div class="preview-label">Header preview</div>
+      <div style="background:var(--text);padding:12px 16px;border-radius:6px;display:flex;align-items:center;gap:10px">
+        <div style="width:8px;height:8px;border-radius:50%;background:var(--accent)" id="previewDot"></div>
+        <span style="font-family:var(--mono);font-size:12px;color:#fff;letter-spacing:.08em" id="previewName">YOUR SHOP / INVENTORY</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="height:80px"></div>
+</div>
+
+<div class="save-bar">
+  <span class="saved-msg" id="savedMsg">✓ Settings saved</span>
+  <div style="display:flex;gap:10px;align-items:center">
+    <span class="save-bar-note">Changes apply immediately across the app</span>
+    <button class="btn btn-primary" onclick="saveSettings()">Save settings</button>
+  </div>
+</div>
+
+<script>
+const PRESETS = ['#c4351c','#2f6f43','#a32b1c','#8a6116','#1a4fa8','#0f766e','#14120f'];
+
+function loadSettings() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  document.getElementById('shopName').value = s.shopName || 'YOUR SHOP';
+  document.getElementById('accentColor').value = s.accentColor || '#c4351c';
+  document.getElementById('fontSize').value = s.fontSize || '14px';
+  document.getElementById('defaultLabelSize').value = s.defaultLabelSize || 'sm';
+  if (s.shopLogo) { document.getElementById('logoPreview').src = s.shopLogo; document.getElementById('logoPreviewWrap').style.display = 'block'; }
+  // The theme is kanban-theme.js's now, shared with the header switch and
+  // the rest of the shop apps. This row reflects and drives that, so the
+  // two controls can never disagree.
+  document.getElementById('darkToggle').classList.toggle('on', isDark());
+  applyAccent(s.accentColor || '#c4351c');
+  updatePreview();
+}
+
+function buildSwatches() {
+  const wrap = document.getElementById('colorSwatches');
+  const cur = document.getElementById('accentColor').value;
+  wrap.innerHTML = PRESETS.map(c => `
+    <div class="swatch ${c===cur?'active':''}" style="background:${c}" onclick="pickColor('${c}')" title="${c}"></div>
+  `).join('');
+}
+
+function pickColor(c) {
+  document.getElementById('accentColor').value = c;
+  applyAccent(c);
+  buildSwatches();
+  updatePreview();
+}
+
+function applyAccent(c) {
+  document.documentElement.style.setProperty('--accent', c);
+  document.getElementById('headerDot').style.background = c;
+  document.getElementById('previewDot').style.background = c;
+}
+
+function isDark() {
+  return document.documentElement.getAttribute('data-theme') === 'dark';
+}
+
+function toggleDark() {
+  const next = isDark() ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  // Same key kanban-theme.js reads, so the choice carries to every page.
+  try { localStorage.setItem('kanban-theme', next); } catch (e) { /* private mode */ }
+  document.getElementById('darkToggle').classList.toggle('on', next === 'dark');
+  updatePreview();
+}
+
+function updatePreview() {
+  const name = document.getElementById('shopName').value.trim().toUpperCase() || 'YOUR SHOP';
+  document.getElementById('previewName').textContent = name + ' / INVENTORY';
+  document.getElementById('headerName').textContent = name + ' / INVENTORY';
+}
+
+document.getElementById('shopName').addEventListener('input', updatePreview);
+document.getElementById('accentColor').addEventListener('input', function() {
+  applyAccent(this.value);
+  buildSwatches();
+  updatePreview();
+});
+document.getElementById('fontSize').addEventListener('change', function() {
+  document.documentElement.style.setProperty('--font-size', this.value);
+  document.body.style.fontSize = this.value;
+});
+
+function saveSettings() {
+  const s = {
+    shopName: document.getElementById('shopName').value.trim() || 'YOUR SHOP',
+    accentColor: document.getElementById('accentColor').value,
+    fontSize: document.getElementById('fontSize').value,
+    defaultLabelSize: document.getElementById('defaultLabelSize').value,
+    shopLogo: currentLogo || null,
+  };
+  localStorage.setItem('kanban_settings', JSON.stringify(s));
+  updateFavicon();
+  const msg = document.getElementById('savedMsg');
+  msg.classList.add('show');
+  setTimeout(() => msg.classList.remove('show'), 2500);
+}
+
+let currentLogo = null;
+
+function handleLogoUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    currentLogo = e.target.result;
+    document.getElementById('logoPreview').src = currentLogo;
+    document.getElementById('logoPreviewWrap').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearLogo() {
+  currentLogo = null;
+  document.getElementById('logoPreviewWrap').style.display = 'none';
+  document.getElementById('logoFile').value = '';
+}
+
+loadSettings();
+buildSwatches();
+// loadApiKey called after definition below
+
+async function loadApiKey() {
+  const status = document.getElementById('apiKeyStatus');
+  const hint = document.getElementById('apiKeyHint');
+  try {
+    const res = await fetch('/api/settings/anthropic-key');
+    const { hasKey } = await res.json();
+    if (hasKey) {
+      status.textContent = '✓ Configured';
+      status.style.color = '#1e6b3e';
+      hint.textContent = 'Paste a product screenshot in Add Item to auto-fill the fields.';
+    } else {
+      status.textContent = 'Not configured';
+      status.style.color = 'var(--muted)';
+    }
+  } catch(e) {
+    status.textContent = 'Status unavailable';
+  }
+}
+
+// ── Export ────────────────────────────────────────────
+async function exportInventory(format) {
+  // For PDF: open window BEFORE any await to avoid popup blocker
+  const pdfWin = format === 'pdf' ? window.open('', '_blank') : null;
+  if (pdfWin) pdfWin.document.write('<html><body><p style="font-family:sans-serif;padding:20px">Loading...</p></body></html>');
+
+  const [itemsRes, catsRes, typesRes] = await Promise.all([
+    fetch('/api/items'),
+    fetch('/api/categories'),
+    fetch('/api/types'),
+  ]);
+  const items = await itemsRes.json();
+  const categories = await catsRes.json();
+  const itemTypes = await typesRes.json();
+
+  if (format === 'json') {
+    const blob = new Blob([JSON.stringify({items, categories, itemTypes, exportedAt: new Date().toISOString()}, null, 2)], {type:'application/json'});
+    download(blob, 'inventory.json');
+    return;
+  }
+
+  if (format === 'csv') {
+    const cols = ['id','description','sku','supplier','itemType','bin','minStock','minUnit','reorderQty','reorderUnit','price','url','status'];
+    const header = cols.join(',');
+    const rows = items.map(i => cols.map(c => {
+      const v = i[c] ?? '';
+      return typeof v === 'string' && (v.includes(',') || v.includes('"')) ? `"${v.replace(/"/g,'""')}"` : v;
+    }).join(','));
+    const blob = new Blob([header + '\n' + rows.join('\n')], {type:'text/csv'});
+    download(blob, 'inventory.csv');
+    return;
+  }
+
+  if (format === 'pdf') {
+    const win = pdfWin;
+    const html = `<!DOCTYPE html><html><head>
+      <title>Your Shop Inventory</title>
+      <style>
+        body{font-family:sans-serif;font-size:11px;margin:20px}
+        h1{font-size:16px;margin-bottom:4px}
+        p{color:#666;margin-bottom:16px;font-size:11px}
+        table{width:100%;border-collapse:collapse}
+        th{background:#1a1916;color:#fff;padding:6px 8px;text-align:left;font-size:10px;letter-spacing:.05em}
+        td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top}
+        tr:nth-child(even) td{background:#f9f9f9}
+        @media print{@page{margin:15mm}}
+      </style>
+    </head><body>
+      <h1>Your Shop — Inventory</h1>
+      <p>${new Date().toLocaleDateString()} · ${items.length} items</p>
+      <table>
+        <thead><tr>
+          <th>Description</th><th>SKU</th><th>Vendor</th><th>Type</th>
+          <th>Location</th><th>Min</th><th>Order Qty</th><th>Price</th>
+        </tr></thead>
+        <tbody>
+          ${items.map(i => `<tr>
+            <td>${i.description||''}</td>
+            <td>${i.sku||''}</td>
+            <td>${i.supplier||''}</td>
+            <td>${i.itemType||''}</td>
+            <td>${i.bin||''}</td>
+            <td>${i.minStock||1}${i.minUnit?' '+i.minUnit:''}</td>
+            <td>${i.reorderQty||1}${i.reorderUnit?' '+i.reorderUnit:''}</td>
+            <td>${i.price?'$'+Number(i.price).toFixed(2):''}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </body></html>`;
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => { win.print(); }, 500);
+    return;
+  }
+}
+
+function download(blob, filename) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ── URL Import ────────────────────────────────────────
+async function importFromUrl(source) {
+  const url = document.getElementById('importUrl').value.trim();
+  if (!url) { setImportStatus('Paste a URL first', 'error'); return; }
+
+  // Auto-detect source
+  let detected = source;
+  if (source === 'auto') {
+    if (url.includes('mcmaster.com')) detected = 'mcmaster';
+    else if (url.includes('amazon.com')) detected = 'amazon';
+    else { setImportStatus('Could not detect supplier — try McMaster or Amazon button', 'error'); return; }
+  }
+
+  setImportStatus('Fetching product info…', 'loading');
+  try {
+    const res = await fetch('/api/import-url', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({url, source: detected})
+    });
+    const data = await res.json();
+    if (data.error) { setImportStatus('Error: ' + data.error, 'error'); return; }
+    setImportStatus(`✓ Added: ${data.description}`, 'success');
+    document.getElementById('importUrl').value = '';
+  } catch(e) {
+    setImportStatus('Failed to fetch — check the URL', 'error');
+  }
+}
+
+function setImportStatus(msg, type) {
+  const el = document.getElementById('importStatus');
+  el.textContent = msg;
+  el.style.color = type === 'error' ? '#9b2020' : type === 'success' ? '#1e6b3e' : 'var(--muted)';
+}
+// Load existing logo
+const _s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+if (_s.shopLogo) currentLogo = _s.shopLogo;
+loadApiKey();
+
+// Update favicon from shop logo
+function updateFavicon() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.shopLogo) {
+    const link = document.getElementById('favicon');
+    if (link) link.href = s.shopLogo;
+  }
+}
+updateFavicon();
+function downloadBackup() {
+  window.location.href = '/api/backup/download';
+}
+
+async function runBackupNow() {
+  const res = await fetch('/api/backup', { method: 'POST' });
+  const data = await res.json();
+  showFlash(data.ok ? '✓ Backup saved to backups/ folder' : '✗ Backup failed');
+}
+
+</script>
+<script>window.SHOP_APP_ID = "kanban";</script>
+</body>
+</html>

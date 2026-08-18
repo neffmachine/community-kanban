@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" href="/favicon.png"><link id="favicon" rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KANBAN · Cells</title>
+<link rel="stylesheet" href="/theme-tokens.css">
+<!-- Blocking on purpose: deferred, the page paints light then flips. -->
+<script src="/theme.js"></script>
+<script>
+/* The accent used to default to blue, and settings writes whatever the
+ * picker shows on every save — so browsers that never chose a colour
+ * still have that blue stored, where an inline style beats the sheet.
+ * Retiring exactly the old default lets the house rust through; any
+ * other value was a deliberate choice and is left alone. */
+try{var _t=JSON.parse(localStorage.getItem("kanban_settings")||"{}");
+if(_t.accentColor==="#1a4fa8"){delete _t.accentColor;
+localStorage.setItem("kanban_settings",JSON.stringify(_t));}}catch(e){}
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+
+body{font-family:var(--sans);background:var(--bg);color:var(--text);min-height:100vh;font-size:14px;line-height:1.5}
+header{background:var(--surface);border-bottom:1px solid var(--line);color:var(--ink);padding:0 24px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:20}
+:root[data-theme="dark"] header{background:var(--surface)}
+.logo{font-family:var(--mono);font-size:13px;letter-spacing:.08em;font-weight:500;display:flex;align-items:center;gap:10px;color:var(--ink);text-decoration:none}
+.logo-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+.nav{display:flex;gap:6px}
+.nav-link{display:flex;align-items:center;gap:5px;color:var(--ink-soft);text-decoration:none;font-size:13px;padding:6px 12px;border-radius:var(--radius);transition:all .15s}
+.nav-link:hover{color:var(--ink);background:var(--surface2)}
+
+.layout{display:grid;grid-template-columns:1fr 320px;min-height:calc(100vh - 56px)}
+.col-main{padding:28px 28px 100px;overflow-y:auto}
+.col-side{background:var(--bg);border-left:1px solid var(--border-light);padding:20px;overflow-y:auto;position:sticky;top:56px;max-height:calc(100vh - 56px)}
+
+.page-title{font-size:20px;font-weight:600;margin-bottom:4px}
+.page-sub{font-size:13px;color:var(--muted);margin-bottom:24px;line-height:1.5}
+
+/* Cell cards */
+.cell-card{background:var(--surface);border:1px solid var(--border-light);border-radius:10px;overflow:hidden;box-shadow:var(--shadow);margin-bottom:20px}
+.cell-card.drag-over{border-color:var(--accent);box-shadow:0 0 0 2px rgba(26,79,168,.2)}
+.cell-head{display:flex;align-items:center;gap:12px;padding:14px 18px;background:var(--bg);border-bottom:1px solid var(--border-light)}
+.cell-swatch{width:28px;height:28px;border-radius:6px;flex-shrink:0;border:2px solid rgba(0,0,0,.1);cursor:pointer;position:relative;transition:transform .1s}
+.cell-swatch:hover{transform:scale(1.1)}
+.cell-swatch input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.cell-info{flex:1;min-width:0}
+.cell-name-input{font-size:15px;font-weight:700;background:none;border:none;color:var(--text);font-family:var(--sans);width:100%;outline:none;padding:0}
+.cell-name-input:focus{border-bottom:1.5px solid var(--accent)}
+.cell-meta{font-size:11px;color:var(--muted);font-family:var(--mono);margin-top:2px}
+.cell-head-actions{display:flex;gap:6px;align-items:center}
+.btn-icon{width:30px;height:30px;border:none;background:none;cursor:pointer;border-radius:var(--radius);display:flex;align-items:center;justify-content:center;color:var(--muted);transition:all .15s}
+.btn-icon:hover{background:var(--border-light);color:var(--text)}
+.btn-icon.danger:hover{background:#fee2e2;color:#dc2626}
+
+/* Subtypes */
+.subtypes-section{padding:8px 0}
+.subtype-row{display:flex;align-items:center;gap:10px;padding:7px 18px;transition:background .1s;cursor:default}
+.subtype-row:hover{background:var(--bg)}
+.subtype-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:1px solid rgba(0,0,0,.1);cursor:pointer;position:relative}
+.subtype-dot input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;border-radius:50%}
+.subtype-name-input{flex:1;background:none;border:none;color:var(--text);font-family:var(--sans);font-size:13px;outline:none;padding:0}
+.subtype-name-input:focus{border-bottom:1px solid var(--accent)}
+.subtype-count{font-family:var(--mono);font-size:10px;color:var(--muted);background:var(--border-light);padding:1px 7px;border-radius:100px;flex-shrink:0}
+.subtype-actions{display:flex;gap:4px;opacity:0;transition:opacity .15s}
+.subtype-row:hover .subtype-actions{opacity:1}
+
+.add-subtype-row{padding:8px 18px 14px;display:flex;align-items:center;gap:8px}
+.add-subtype-input{flex:1;padding:6px 10px;border:1px dashed var(--border);border-radius:var(--radius);background:none;font-family:var(--sans);font-size:13px;color:var(--text);outline:none;transition:border-color .15s}
+.add-subtype-input:focus{border-color:var(--accent);border-style:solid}
+.add-subtype-input::placeholder{color:var(--muted)}
+.add-subtype-color{width:24px;height:24px;border-radius:4px;border:1px solid rgba(0,0,0,.1);flex-shrink:0;cursor:pointer;position:relative}
+.add-subtype-color input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+
+/* No-subtypes footer */
+.cell-footer{padding:10px 18px;border-top:1px solid var(--border-light);display:flex;align-items:center;justify-content:space-between;background:var(--bg)}
+.cell-footer-note{font-size:11px;color:var(--muted)}
+.btn-text{background:none;border:none;cursor:pointer;font-size:12px;color:var(--accent);font-family:var(--sans);padding:4px 8px;border-radius:var(--radius);transition:background .15s}
+.btn-text:hover{background:rgba(26,79,168,.08)}
+.btn-text.danger{color:#dc2626}
+.btn-text.danger:hover{background:#fee2e2}
+
+/* Buttons */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);border:none;cursor:pointer;font-size:13px;font-family:var(--sans);font-weight:500;transition:all .15s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#1545a0}
+.btn-secondary{background:var(--surface);border:1px solid var(--border);color:var(--text)}
+.btn-secondary:hover{background:var(--bg)}
+.btn-ghost{background:none;border:1.5px dashed var(--border);color:var(--muted)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--accent)}
+.btn-warning{background:#fff7ed;border:1px solid #fdba74;color:#c2410c}
+.btn-warning:hover{background:#ffedd5}
+
+/* Side panel */
+.side-section{margin-bottom:24px}
+.side-title{font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:12px;font-family:var(--mono)}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--border-light);font-size:13px}
+.stat-row:last-child{border-bottom:none}
+.stat-val{font-family:var(--mono);font-weight:600;color:var(--text)}
+
+.migrate-box{background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius);padding:14px;margin-bottom:16px}
+.migrate-title{font-size:13px;font-weight:600;margin-bottom:6px;display:flex;align-items:center;gap:6px}
+.migrate-desc{font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.5}
+.migrate-result{font-size:11px;font-family:var(--mono);color:var(--muted);margin-top:8px;padding:6px 8px;background:var(--bg);border-radius:4px;display:none}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;background:#14120f;color:#fff;padding:10px 18px;border-radius:var(--radius);font-size:13px;font-family:var(--mono);z-index:999;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.err{background:#dc2626}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:500;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:12px;padding:28px;width:400px;max-width:90vw;box-shadow:0 8px 40px rgba(0,0,0,.18)}
+.modal-title{font-size:17px;font-weight:700;margin-bottom:8px}
+.modal-body{font-size:14px;color:var(--muted);margin-bottom:24px;line-height:1.5}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end}
+
+/* Add cell form */
+.add-cell-form{background:var(--surface);border:1.5px dashed var(--border);border-radius:10px;padding:20px;margin-bottom:20px;display:none}
+.add-cell-form.open{display:block}
+.form-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.form-label{font-size:12px;font-weight:600;color:var(--muted);width:80px;flex-shrink:0;letter-spacing:.04em}
+.form-input{flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);font-family:var(--sans);font-size:13px;background:var(--bg);color:var(--text);outline:none;transition:border-color .15s}
+.form-input:focus{border-color:var(--accent);background:var(--surface)}
+.color-preview{width:32px;height:32px;border-radius:6px;border:2px solid rgba(0,0,0,.1);flex-shrink:0;position:relative}
+.color-preview input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.checkbox-row{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.checkbox-row input{cursor:pointer}
+@media (max-width: 640px) {
+  header { height: auto; min-height: 52px; flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; }
+  .logo { font-size: 11px; white-space: nowrap; }
+  .nav { gap: 8px; flex-wrap: wrap; }
+  .nav-link { font-size: 12px; }
+  .layout { grid-template-columns: 1fr; padding: 16px 14px; gap: 20px; }
+  .cell-head { flex-wrap: wrap; gap: 8px; }
+  .cell-head-actions { flex-wrap: wrap; }
+  .subtype-row { flex-wrap: wrap; gap: 8px; }
+  .subtype-actions { opacity: 1; }
+  .add-subtype-row { flex-wrap: wrap; }
+}
+
+
+:root[data-theme="dark"]{--surface2:#2b2721}
+</style>
+</head>
+<body>
+<header>
+  <a href="/" class="logo"><span class="logo-dot" id="headerDot"></span><span id="headerName">YOUR SHOP / CELLS</span></a>
+  <nav class="nav">
+    <span id="theme-toggle"></span>
+    <a href="/settings.html" class="nav-link">Settings</a>
+    <a href="/" class="nav-link">← Inventory</a>
+  </nav>
+</header>
+
+<div class="layout">
+  <div class="col-main">
+    <div class="page-title">Cell Manager</div>
+    <div class="page-sub">Cells are physical areas of the shop. Each cell can have locations (e.g. Cabinet A, Shelf 2). Tool Crib uses subtypes instead (tool categories). Item card headers show the cell label.</div>
+
+    <!-- Add cell form -->
+    <div class="add-cell-form" id="addCellForm">
+      <div style="font-size:14px;font-weight:700;margin-bottom:14px">New Cell</div>
+      <div class="form-row">
+        <span class="form-label">Name</span>
+        <input class="form-input" id="newCellName" placeholder="e.g. Fab Shop" maxlength="40">
+        <div class="color-preview" id="newCellColorPreview" style="background:#888">
+          <input type="color" id="newCellColor" value="#888888" oninput="document.getElementById('newCellColorPreview').style.background=this.value">
+        </div>
+      </div>
+      <div class="form-row">
+        <span class="form-label"></span>
+        <label class="checkbox-row"><input type="checkbox" id="newCellHasSubs"> Has locations (or subtypes for Tool Crib)</label>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn btn-primary" onclick="saveNewCell()">Add Cell</button>
+        <button class="btn btn-secondary" onclick="closeAddCell()">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Cells list -->
+    <div id="cellsList"></div>
+
+    <button class="btn btn-ghost" id="addCellBtn" onclick="openAddCell()" style="margin-top:4px">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add Cell
+    </button>
+  </div>
+
+  <div class="col-side">
+    <div class="side-section">
+      <div class="side-title">Overview</div>
+      <div id="statsBox">
+        <div class="stat-row"><span>Cells</span><span class="stat-val" id="statCells">—</span></div>
+        <div class="stat-row"><span>With locations/subtypes</span><span class="stat-val" id="statWithSubs">—</span></div>
+        <div class="stat-row"><span>Total locations/subtypes</span><span class="stat-val" id="statSubtypes">—</span></div>
+        <div class="stat-row"><span>Uncategorized items</span><span class="stat-val" id="statUncategorized">—</span></div>
+      </div>
+    </div>
+
+    <div class="side-section">
+      <div class="side-title">Migration</div>
+      <div class="migrate-box">
+        <div class="migrate-title">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+          Collapse Tool Categories
+        </div>
+        <div class="migrate-desc">Moves legacy tool-type categories (Aluminum Cutting, Steel Cutting, etc.) into Tool Crib subtypes. Safe to run multiple times.</div>
+        <button class="btn btn-warning" onclick="runMigration()" id="migrateBtn">Run Migration</button>
+        <div class="migrate-result" id="migrateResult"></div>
+      </div>
+    </div>
+
+    <div class="side-section">
+      <div class="side-title">How It Works</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.6">
+        <p style="margin-bottom:8px"><strong style="color:var(--text)">Cell color</strong> → card header background</p>
+        <p style="margin-bottom:8px"><strong style="color:var(--text)">Cell label</strong> → card header text (not shop name)</p>
+        <p style="margin-bottom:8px"><strong style="color:var(--text)">Location/subtype color</strong> → stored as item.category; resolves to parent cell for filtering</p>
+        <p><strong style="color:var(--text)">Rename/recolor</strong> → saves immediately. Recolor prompts to remap all items.</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm delete modal -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <div class="modal-title" id="deleteModalTitle">Delete cell?</div>
+    <div class="modal-body" id="deleteModalBody">This cannot be undone.</div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn" style="background:#dc2626;color:#fff" id="deleteModalConfirm">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Remap color modal -->
+<div class="modal-overlay" id="remapModal">
+  <div class="modal">
+    <div class="modal-title">Remap item colors?</div>
+    <div class="modal-body" id="remapModalBody">Update all items with the old color to the new color?</div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeRemapModal(false)">Skip</button>
+      <button class="btn btn-primary" onclick="closeRemapModal(true)">Remap Items</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+let cats = {};
+let itemCounts = {}; // color -> item count
+let pendingRemap = null; // {oldColor, newColor, resolve}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+
+async function load() {
+  const [catsRes, itemsRes] = await Promise.all([
+    fetch('/api/categories').then(r => r.json()),
+    fetch('/api/items').then(r => r.json())
+  ]);
+  cats = catsRes;
+
+  // Build item counts per color
+  itemCounts = {};
+  let uncategorized = 0;
+  for (const item of itemsRes) {
+    if (!item.category) { uncategorized++; continue; }
+    itemCounts[item.category] = (itemCounts[item.category] || 0) + 1;
+  }
+
+  renderStats(uncategorized);
+  renderCells();
+}
+
+function renderStats(uncategorized) {
+  const cellList = Object.entries(cats);
+  const withSubs = cellList.filter(([,c]) => Object.keys(c.subtypes||{}).length > 0);
+  const totalSubs = cellList.reduce((n,[,c]) => n + Object.keys(c.subtypes||{}).length, 0);
+  document.getElementById('statCells').textContent = cellList.length;
+  document.getElementById('statWithSubs').textContent = withSubs.length;
+  document.getElementById('statSubtypes').textContent = totalSubs;
+  document.getElementById('statUncategorized').textContent = uncategorized ?? '—';
+}
+
+// ── Render cells ──────────────────────────────────────────────────────────────
+
+function renderCells() {
+  const container = document.getElementById('cellsList');
+  const entries = Object.entries(cats).sort((a,b) => a[1].label.localeCompare(b[1].label));
+  if (!entries.length) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0">No cells defined. Add one below.</div>';
+    return;
+  }
+  container.innerHTML = entries.map(([color, cell]) => renderCellCard(color, cell)).join('');
+}
+
+function getCellItemCount(color, cell) {
+  // Count items assigned to this cell or any of its subtypes
+  let n = itemCounts[color] || 0;
+  for (const sc of Object.keys(cell.subtypes || {})) {
+    n += itemCounts[sc] || 0;
+  }
+  return n;
+}
+
+function isToolCell(cell) {
+  return (cell.label || '').toLowerCase().includes('tool');
+}
+
+function subLabel(cell, plural) {
+  return isToolCell(cell) ? (plural ? 'subtypes' : 'subtype') : (plural ? 'locations' : 'location');
+}
+
+function renderCellCard(color, cell) {
+  const subs = cell.subtypes || {};
+  const hasSubs = cell.subtypes != null;
+  const itemCount = getCellItemCount(color, cell);
+  const subCount = Object.keys(subs).length;
+  const sl1 = subLabel(cell, false);
+  const slN = subLabel(cell, true);
+
+  const subRows = Object.entries(subs).sort((a,b) => a[1].localeCompare(b[1])).map(([sc, sl]) => {
+    const cnt = itemCounts[sc] || 0;
+    return `<div class="subtype-row" data-subcolor="${esc(sc)}">
+      <div class="subtype-dot" title="Change color">
+        <input type="color" value="${esc(sc)}" onchange="onSubtypeColorChange('${esc(color)}','${esc(sc)}',this.value)">
+      </div>
+      <input class="subtype-name-input" value="${esc(sl)}" placeholder="${capitalize(sl1)} name"
+        onblur="onSubtypeRename('${esc(color)}','${esc(sc)}',this.value)"
+        onkeydown="if(event.key==='Enter')this.blur()">
+      <span class="subtype-count">${cnt}</span>
+      <div class="subtype-actions">
+        <button class="btn-icon danger" title="Delete ${sl1}" onclick="confirmDeleteSubtype('${esc(color)}','${esc(sc)}','${esc(sl)}',${cnt})">
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const addSubRow = hasSubs ? `
+    <div class="add-subtype-row">
+      ${isToolCell(cell) ? `<div class="add-subtype-color" id="newSubColor_${esc(color)}" style="background:#888888">
+        <input type="color" value="#888888" oninput="document.getElementById('newSubColor_${esc(color)}').style.background=this.value" id="newSubColorInput_${esc(color)}">
+      </div>` : ''}
+      <input class="add-subtype-input" id="newSubInput_${esc(color)}" placeholder="New ${sl1} name…"
+        onkeydown="if(event.key==='Enter')addSubtype('${esc(color)}')">
+      <button class="btn btn-secondary" style="padding:5px 12px;font-size:12px" onclick="addSubtype('${esc(color)}')">Add</button>
+    </div>` : '';
+
+  const cellFooter = !hasSubs ? `
+    <div class="cell-footer">
+      <span class="cell-footer-note">Plain cell — no ${slN}</span>
+      <button class="btn-text" onclick="convertToSubtypeCell('${esc(color)}')">+ Add ${slN}</button>
+    </div>` : '';
+
+  const subtypesDivider = hasSubs ? `<div style="height:1px;background:var(--border-light);margin:0 18px"></div>` : '';
+
+  return `<div class="cell-card" id="cellCard_${esc(color)}">
+    <div class="cell-head">
+      <div class="cell-swatch" style="background:${color}" title="Change cell color">
+        <input type="color" value="${color}" onchange="onCellColorChange('${esc(color)}',this.value)">
+      </div>
+      <div class="cell-info">
+        <input class="cell-name-input" value="${esc(cell.label)}" placeholder="Cell name"
+          onblur="onCellRename('${esc(color)}',this.value)"
+          onkeydown="if(event.key==='Enter')this.blur()">
+        <div class="cell-meta">${itemCount} item${itemCount===1?'':'s'}${hasSubs?' · '+subCount+' '+sl1+(subCount===1?'':'s'):''}</div>
+      </div>
+      <div class="cell-head-actions">
+        <button class="btn-icon danger" title="Delete cell" onclick="confirmDeleteCell('${esc(color)}','${esc(cell.label)}',${itemCount})">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        </button>
+      </div>
+    </div>
+    ${hasSubs ? `<div class="subtypes-section">${subRows}</div>${subtypesDivider}${addSubRow}` : ''}
+    ${cellFooter}
+  </div>`;
+}
+
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// ── Cell edits ────────────────────────────────────────────────────────────────
+
+function onCellRename(color, newLabel) {
+  newLabel = newLabel.trim();
+  if (!newLabel || !cats[color] || cats[color].label === newLabel) return;
+  cats[color].label = newLabel;
+  saveCats('Cell renamed');
+}
+
+function onCellColorChange(oldColor, newColor) {
+  if (!newColor || newColor === oldColor || !cats[oldColor]) return;
+  if (cats[newColor]) { toast('Color already in use', true); return; }
+  const itemCount = getCellItemCount(oldColor, cats[oldColor]);
+  if (itemCount > 0) {
+    openRemapModal(oldColor, newColor, 'cell', null).then(doRemap => {
+      _applyCellColorChange(oldColor, newColor, doRemap);
+    });
+  } else {
+    _applyCellColorChange(oldColor, newColor, false);
+  }
+}
+
+function _applyCellColorChange(oldColor, newColor, doRemap) {
+  const cell = cats[oldColor];
+  delete cats[oldColor];
+  cats[newColor] = cell;
+  if (doRemap) remapCategory(oldColor, newColor);
+  saveCats('Cell color updated');
+}
+
+function convertToSubtypeCell(color) {
+  if (!cats[color]) return;
+  cats[color].subtypes = {};
+  renderCells();
+  saveCats(null);
+}
+
+// ── Subtype edits ─────────────────────────────────────────────────────────────
+
+function onSubtypeRename(cellColor, subColor, newLabel) {
+  newLabel = newLabel.trim();
+  if (!newLabel || !cats[cellColor]?.subtypes?.[subColor] || cats[cellColor].subtypes[subColor] === newLabel) return;
+  cats[cellColor].subtypes[subColor] = newLabel;
+  saveCats(capitalize(subLabel(cats[cellColor], false)) + ' renamed');
+}
+
+function onSubtypeColorChange(cellColor, oldSub, newSub) {
+  if (!newSub || newSub === oldSub) return;
+  const subs = cats[cellColor]?.subtypes;
+  if (!subs || !subs[oldSub]) return;
+  const cnt = itemCounts[oldSub] || 0;
+  if (cnt > 0) {
+    openRemapModal(oldSub, newSub, 'subtype', cats[cellColor]).then(doRemap => {
+      _applySubtypeColorChange(cellColor, oldSub, newSub, doRemap);
+    });
+  } else {
+    _applySubtypeColorChange(cellColor, oldSub, newSub, false);
+  }
+}
+
+function _applySubtypeColorChange(cellColor, oldSub, newSub, doRemap) {
+  const label = cats[cellColor].subtypes[oldSub];
+  delete cats[cellColor].subtypes[oldSub];
+  cats[cellColor].subtypes[newSub] = label;
+  if (doRemap) remapCategory(oldSub, newSub);
+  saveCats('Subtype color updated');
+}
+
+function addSubtype(cellColor) {
+  const input = document.getElementById('newSubInput_' + cellColor);
+  const name = input.value.trim();
+  if (!name) { input.focus(); return; }
+
+  let color;
+  if (isToolCell(cats[cellColor])) {
+    // Tool cell — use the color picker value
+    const colorInput = document.getElementById('newSubColorInput_' + cellColor);
+    color = colorInput ? colorInput.value : '#888888';
+    if (cats[cellColor]?.subtypes?.[color] !== undefined) {
+      toast('That color is already a subtype', true); return;
+    }
+    if (colorInput) { colorInput.value = '#888888'; }
+    const swatch = document.getElementById('newSubColor_' + cellColor);
+    if (swatch) swatch.style.background = '#888888';
+  } else {
+    // Location cell — generate a unique key, color doesn't matter visually
+    do { color = '#' + Math.floor(Math.random()*0xffffff).toString(16).padStart(6,'0'); }
+    while (cats[cellColor]?.subtypes?.[color] !== undefined);
+  }
+
+  cats[cellColor].subtypes[color] = name;
+  input.value = '';
+  saveCats(capitalize(subLabel(cats[cellColor], false)) + ' added');
+}
+
+// ── Delete ────────────────────────────────────────────────────────────────────
+
+let pendingDelete = null;
+
+function confirmDeleteCell(color, label, itemCount) {
+  const modal = document.getElementById('deleteModal');
+  document.getElementById('deleteModalTitle').textContent = `Delete "${label}"?`;
+  document.getElementById('deleteModalBody').textContent = itemCount > 0
+    ? `This cell has ${itemCount} item${itemCount===1?'':'s'}. Items will become uncategorized. This cannot be undone.`
+    : 'Are you sure? This cannot be undone.';
+  document.getElementById('deleteModalConfirm').onclick = () => {
+    delete cats[color];
+    closeDeleteModal();
+    saveCats('Cell deleted');
+  };
+  modal.classList.add('open');
+}
+
+function confirmDeleteSubtype(cellColor, subColor, subLabelText, itemCount) {
+  const sl1 = subLabel(cats[cellColor], false);
+  const modal = document.getElementById('deleteModal');
+  document.getElementById('deleteModalTitle').textContent = `Delete ${sl1} "${subLabelText}"?`;
+  document.getElementById('deleteModalBody').textContent = itemCount > 0
+    ? `${itemCount} item${itemCount===1?' has':'s have'} this ${sl1}. They will become uncategorized. This cannot be undone.`
+    : 'Are you sure? This cannot be undone.';
+  document.getElementById('deleteModalConfirm').onclick = () => {
+    delete cats[cellColor].subtypes[subColor];
+    closeDeleteModal();
+    saveCats(`${capitalize(sl1)} deleted`);
+  };
+  modal.classList.add('open');
+}
+
+function closeDeleteModal() {
+  document.getElementById('deleteModal').classList.remove('open');
+}
+
+// ── Remap modal ───────────────────────────────────────────────────────────────
+
+function openRemapModal(oldColor, newColor, type, cell) {
+  return new Promise(resolve => {
+    pendingRemap = { resolve };
+    const cnt = itemCounts[oldColor] || 0;
+    const typeLabel = type === 'cell' ? 'this cell color' : `this ${cell ? subLabel(cell, false) : 'subtype'} color`;
+    document.getElementById('remapModalBody').textContent =
+      `${cnt} item${cnt===1?'':'s'} ${cnt===1?'has':'have'} ${typeLabel}. Update them to the new color?`;
+    document.getElementById('remapModal').classList.add('open');
+  });
+}
+
+function closeRemapModal(doRemap) {
+  document.getElementById('remapModal').classList.remove('open');
+  if (pendingRemap) {
+    pendingRemap.resolve(doRemap);
+    pendingRemap = null;
+  }
+}
+
+async function remapCategory(oldColor, newColor) {
+  try {
+    await fetch('/api/items/remap-category', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({oldColor, newColor})
+    });
+    // Update local counts
+    itemCounts[newColor] = (itemCounts[newColor] || 0) + (itemCounts[oldColor] || 0);
+    delete itemCounts[oldColor];
+  } catch(e) {
+    toast('Remap request failed', true);
+  }
+}
+
+// ── Add cell form ─────────────────────────────────────────────────────────────
+
+function openAddCell() {
+  document.getElementById('addCellForm').classList.add('open');
+  document.getElementById('addCellBtn').style.display = 'none';
+  document.getElementById('newCellName').focus();
+}
+
+function closeAddCell() {
+  document.getElementById('addCellForm').classList.remove('open');
+  document.getElementById('addCellBtn').style.display = '';
+  document.getElementById('newCellName').value = '';
+  document.getElementById('newCellColor').value = '#888888';
+  document.getElementById('newCellColorPreview').style.background = '#888888';
+  document.getElementById('newCellHasSubs').checked = false;
+}
+
+function saveNewCell() {
+  const name = document.getElementById('newCellName').value.trim();
+  const color = document.getElementById('newCellColor').value;
+  const hasSubs = document.getElementById('newCellHasSubs').checked;
+  if (!name) { document.getElementById('newCellName').focus(); return; }
+  if (cats[color]) { toast('That color is already in use', true); return; }
+  cats[color] = { label: name, subtypes: hasSubs ? {} : null };
+  closeAddCell();
+  saveCats('Cell added');
+}
+
+// ── Migration ─────────────────────────────────────────────────────────────────
+
+async function runMigration() {
+  const btn = document.getElementById('migrateBtn');
+  const result = document.getElementById('migrateResult');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  try {
+    const r = await fetch('/api/migrate/tool-crib', {method:'POST'});
+    const data = await r.json();
+    result.style.display = 'block';
+    result.textContent = `✅ Done — ${data.cells} cells, ${data.toolItems} tool items, subtypes: ${data.subtypes.join(', ')||'none'}`;
+    btn.textContent = 'Run Migration';
+    btn.disabled = false;
+    toast('Migration complete');
+    await load();
+  } catch(e) {
+    result.style.display = 'block';
+    result.textContent = '❌ Migration failed: ' + e.message;
+    btn.textContent = 'Run Migration';
+    btn.disabled = false;
+    toast('Migration failed', true);
+  }
+}
+
+// ── Save ──────────────────────────────────────────────────────────────────────
+
+async function saveCats(msg) {
+  try {
+    await fetch('/api/categories', {
+      method: 'PUT',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(cats)
+    });
+    renderCells();
+    renderStats();
+    if (msg) toast(msg);
+  } catch(e) {
+    toast('Save failed', true);
+  }
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+
+let toastTimer;
+function toast(msg, err) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (err ? ' err' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+function applySettings() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.accentColor) document.documentElement.style.setProperty('--accent', s.accentColor);
+  document.getElementById('headerDot').style.background = s.accentColor || '#c4351c';
+  document.getElementById('headerName').textContent = (s.shopName||'YOUR SHOP').toUpperCase() + ' / CELLS';
+  if (s.shopLogo) {
+    const link = document.getElementById('favicon');
+    if (link) link.href = s.shopLogo;
+  }
+}
+
+applySettings();
+load();
+
+fetch('/api/env').then(r=>r.json()).then(env => {
+  if (env.dev) document.title = '⚠ DEV — ' + document.title;
+}).catch(()=>{});
+</script>
+<script>window.SHOP_APP_ID = "kanban";</script>
+</body>
+</html>

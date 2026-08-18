@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/png" href="/favicon.png"><link id="favicon" rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KANBAN · Reorder</title>
+<link rel="stylesheet" href="/theme-tokens.css">
+<!-- Blocking on purpose: deferred, the page paints light then flips. -->
+<script src="/theme.js"></script>
+<script>
+/* The accent used to default to blue, and settings writes whatever the
+ * picker shows on every save — so browsers that never chose a colour
+ * still have that blue stored, where an inline style beats the sheet.
+ * Retiring exactly the old default lets the house rust through; any
+ * other value was a deliberate choice and is left alone. */
+try{var _t=JSON.parse(localStorage.getItem("kanban_settings")||"{}");
+if(_t.accentColor==="#1a4fa8"){delete _t.accentColor;
+localStorage.setItem("kanban_settings",JSON.stringify(_t));}}catch(e){}
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; font-size: 14px; }
+  .card { background: var(--surface); border-radius: 12px; padding: 28px; width: 100%; max-width: 400px; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }
+  .brand { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 20px; display: flex; align-items: center; gap: 8px; }
+  .brand-dot { width: 6px; height: 6px; background: var(--text); border-radius: 50%; }
+  .sku { font-family: var(--mono); font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+  .desc { font-size: 15px; color: var(--muted); margin-bottom: 18px; line-height: 1.4; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 20px; }
+  .info-cell { background: #faf7f0; border-radius: 8px; padding: 10px 12px; }
+  .info-cell-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+  .info-cell-value { font-family: var(--mono); font-size: 14px; font-weight: 500; }
+  .info-cell.dark { background:var(--text);color:var(--paper); grid-column: span 2; text-align: center; }
+  .info-cell.dark .info-cell-label { color: rgba(255,255,255,0.5); }
+  .info-cell.dark .info-cell-value { font-size: 22px; }
+  .divider { height: 1px; background: #ede9e2; margin: 18px 0; }
+  .form-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-family: var(--sans); font-size: 14px; background: var(--surface); color: var(--text); outline: none; margin-bottom: 14px; transition: border-color 0.15s; }
+  input:focus { border-color: var(--text); }
+  .btn { display: block; width: 100%; padding: 13px; border-radius: 8px; font-family: var(--sans); font-size: 15px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; text-align: center; }
+  .btn-primary { background:var(--text);color:var(--paper); }
+  .btn-primary:hover { background: #333; }
+
+  .success-state { display: none; text-align: center; padding: 8px 0; }
+  .success-icon { width: 52px; height: 52px; background: var(--ok-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 14px; }
+  .success-icon svg { color: var(--ok); }
+  .success-title { font-size: 17px; font-weight: 600; margin-bottom: 6px; }
+  .success-sub { font-size: 13px; color: var(--muted); line-height: 1.5; margin-bottom: 16px; }
+  .view-queue-btn { display: inline-block; padding: 10px 20px; background: var(--cart-bg); color: var(--cart); border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; transition: background 0.15s; }
+  .view-queue-btn:hover { background: #d0ddf5; }
+
+  .loading { text-align: center; padding: 40px; color: var(--muted); }
+  .error { text-align: center; padding: 40px; }
+  .error h2 { font-size: 18px; margin-bottom: 8px; }
+
+  .already-queued { background: var(--cart-bg); border: 1px solid #b8caf0; border-radius: 8px; padding: 12px 14px; font-size: 13px; color: var(--cart); display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="brand"><span class="brand-dot"></span>YOUR SHOP / KANBAN</div>
+  <div id="loadingState" class="loading">Loading...</div>
+  <div id="errorState" style="display:none" class="error"><h2>Item Not Found</h2><p style="color:var(--muted)">This QR code may be outdated.</p></div>
+  <div id="itemState" style="display:none">
+    <div class="sku" id="itemSku"></div>
+    <div class="desc" id="itemDesc"></div>
+    <div class="info-grid">
+      <div class="info-cell"><div class="info-cell-label">Supplier</div><div class="info-cell-value" id="itemSupplier"></div></div>
+      <div class="info-cell"><div class="info-cell-label">Bin</div><div class="info-cell-value" id="itemBin"></div></div>
+      <div class="info-cell"><div class="info-cell-label">Min Stock</div><div class="info-cell-value" id="itemMinStock"></div></div>
+      <div class="info-cell dark"><div class="info-cell-label">Reorder Quantity</div><div class="info-cell-value" id="itemQty"></div></div>
+    </div>
+    <div id="formState">
+      <div id="alreadyQueuedMsg" class="already-queued" style="display:none">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+        Already in the order queue
+      </div>
+      <div class="divider"></div>
+      <label class="form-label">Your name</label>
+      <input type="text" id="reqName" placeholder="e.g. Morgan">
+      <button class="btn btn-primary" onclick="submitReorder()">Add to Order Queue</button>
+    </div>
+    <div class="success-state" id="successState">
+      <div class="success-icon">
+        <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="success-title">Added to order queue</div>
+      <div class="success-sub">This item has been flagged for reorder.<br>Check the order queue to place the order.</div>
+      <a href="/cart" class="view-queue-btn">View order queue →</a>
+    </div>
+  </div>
+</div>
+
+<script>
+  const id = location.pathname.split('/').pop();
+  let alreadyInCart = false;
+
+  async function loadItem() {
+    try {
+      // Single public endpoint (outside the shop login) — returns only the fields
+      // shown below plus `alreadyQueued`, so scanned codes work with no login.
+      const res = await fetch(`/api/reorder/${id}`);
+      if (!res.ok) throw new Error('not found');
+      const item = await res.json();
+      alreadyInCart = item.alreadyQueued;
+
+      document.getElementById('itemSku').textContent = item.sku;
+      document.getElementById('itemDesc').textContent = item.description;
+      document.getElementById('itemSupplier').textContent = item.supplier || '—';
+      document.getElementById('itemBin').textContent = item.bin || '—';
+      document.getElementById('itemMinStock').textContent = item.minStock || 1;
+      document.getElementById('itemQty').textContent = item.reorderQty || item.minStock || 1;
+
+      if (alreadyInCart) {
+        document.getElementById('alreadyQueuedMsg').style.display = 'flex';
+      }
+
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('itemState').style.display = 'block';
+    } catch(e) {
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('errorState').style.display = 'block';
+    }
+  }
+
+  async function submitReorder() {
+    const name = document.getElementById('reqName').value.trim();
+    if (!name) { alert('Please enter your name.'); return; }
+    await fetch(`/api/reorder/${id}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ addedBy: name })
+    });
+    document.getElementById('formState').style.display = 'none';
+    document.getElementById('successState').style.display = 'block';
+  }
+
+  loadItem();
+
+// Update favicon from shop logo
+function updateFavicon() {
+  const s = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  if (s.shopLogo) {
+    const link = document.getElementById('favicon');
+    if (link) link.href = s.shopLogo;
+  }
+}
+updateFavicon();
+</script>
+</body>
+</html>
