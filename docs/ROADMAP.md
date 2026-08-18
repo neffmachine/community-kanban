@@ -11,7 +11,7 @@ Cloudflare-Access assumptions, or hardcoded hosts.
 
 ---
 
-## Milestone 1 — Inventory core
+## Milestone 1 — Inventory core ✅ done
 The real inventory page in place of the placeholder `public/index.html`.
 - Full item fields (min/reorder units, price, url, photo, itemType, status).
 - Categories/cells (color + label + subtypes) and locations, with their API.
@@ -20,6 +20,12 @@ The real inventory page in place of the placeholder `public/index.html`.
 - Search + category/vendor filters.
 - Schema adds: extend `items`; keep `categories`, `locations`.
 **Done when:** you can add/edit/search real items with cells & locations on both hosts.
+**Shipped:** items carry `minUnit`/`reorderUnit`/`itemType`; `categories`, `types`
+and `locations` each have a GET/PUT pair; `public/index.html` is the real item
+page (search, cell/vendor filters, add/edit dialog, config editor). Search and
+filtering live in `public/filters.mjs` so they are unit-tested. Existing
+databases gain the new columns automatically on local, and via
+`src/db/migrations/001-inventory-core.sql` on Cloudflare.
 
 ## Milestone 2 — Reorder flow
 - Reorder queue ("cart"), min-stock status, mark-ordered, receiving.
