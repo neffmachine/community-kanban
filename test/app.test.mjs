@@ -68,3 +68,91 @@ test('items round-trip and normalize the physical-run flag', async () => {
   await call('/api/items/' + created.id, { method: 'DELETE', headers: h });
   assert.deepEqual(await (await call('/api/items', { headers: h })).json(), []);
 });
+
+const signIn = async (call) =>
+  ({ cookie: cookieFrom(await call('/api/login', { method: 'POST', body: '{"password":"hunter2"}' })) });
+
+test('items carry the inventory-core fields through create and update', async () => {
+  const call = makeClient();
+  const h = await signIn(call);
+
+  const created = await (await call('/api/items', {
+    method: 'POST', headers: h,
+    body: JSON.stringify({
+      description: 'Carbide endmill', sku: 'em-250', supplier: 'Lakeshore',
+      minStock: 4, reorderQty: 10, minUnit: 'ea', reorderUnit: 'box of 5',
+      price: 32.5, bin: 'Tool crib', itemType: 'Endmill', category: '#ff0000',
+      url: 'https://example.com/em250',
+    }),
+  })).json();
+  assert.equal(created.minUnit, 'ea');
+  assert.equal(created.reorderUnit, 'box of 5');
+  assert.equal(created.itemType, 'Endmill');
+  assert.equal(created.bin, 'Tool crib');
+  assert.equal(created.minStock, 4);
+  assert.equal(created.price, 32.5);
+  assert.equal(created.status, 'ok');
+
+  // A partial update leaves untouched fields alone.
+  const updated = await (await call('/api/items/' + created.id, {
+    method: 'PUT', headers: h, body: JSON.stringify({ reorderUnit: 'box of 10' }),
+  })).json();
+  assert.equal(updated.reorderUnit, 'box of 10');
+  assert.equal(updated.minUnit, 'ea');
+  assert.equal(updated.itemType, 'Endmill');
+  assert.equal(updated.description, 'Carbide endmill');
+});
+
+test('cells round-trip as a colour-keyed map, subtypes included', async () => {
+  const call = makeClient();
+  const h = await signIn(call);
+
+  const fresh = await (await call('/api/categories', { headers: h })).json();
+  assert.deepEqual(fresh, { '#6b7280': { label: 'General', subtypes: {} } });
+
+  const put = { '#ff0000': { label: 'Tooling', subtypes: { '#ff8888': 'Carbide' } }, '#00ff00': { label: 'Gas', subtypes: {} } };
+  assert.equal((await call('/api/categories', { method: 'PUT', headers: h, body: JSON.stringify(put) })).status, 200);
+  assert.deepEqual(await (await call('/api/categories', { headers: h })).json(), put);
+
+  // PUT replaces the whole map rather than merging into it.
+  await call('/api/categories', { method: 'PUT', headers: h, body: JSON.stringify({ '#0000ff': { label: 'Abrasives', subtypes: {} } }) });
+  const after = await (await call('/api/categories', { headers: h })).json();
+  assert.deepEqual(Object.keys(after), ['#0000ff']);
+
+  assert.equal((await call('/api/categories', { method: 'PUT', headers: h, body: '[]' })).status, 400);
+});
+
+test('item types round-trip and default their colour', async () => {
+  const call = makeClient();
+  const h = await signIn(call);
+  assert.deepEqual(await (await call('/api/types', { headers: h })).json(), {});
+
+  await call('/api/types', { method: 'PUT', headers: h, body: JSON.stringify({ Endmill: { color: '#123456' }, Gas: {} }) });
+  assert.deepEqual(await (await call('/api/types', { headers: h })).json(), {
+    Endmill: { color: '#123456' }, Gas: { color: '#6b7280' },
+  });
+  assert.equal((await call('/api/types', { method: 'PUT', headers: h, body: '"nope"' })).status, 400);
+});
+
+test('locations round-trip as a list, trimmed and deduplicated', async () => {
+  const call = makeClient();
+  const h = await signIn(call);
+  assert.deepEqual(await (await call('/api/locations', { headers: h })).json(), []);
+
+  const saved = await (await call('/api/locations', {
+    method: 'PUT', headers: h, body: JSON.stringify(['  Tool crib ', 'Welding', 'Tool crib', '', '   ']),
+  })).json();
+  assert.deepEqual(saved, ['Tool crib', 'Welding']);
+  assert.deepEqual(await (await call('/api/locations', { headers: h })).json(), ['Tool crib', 'Welding']);
+
+  assert.deepEqual(await (await call('/api/locations', { method: 'PUT', headers: h, body: '[]' })).json(), []);
+  assert.equal((await call('/api/locations', { method: 'PUT', headers: h, body: '{}' })).status, 400);
+});
+
+test('every config route is closed without a session', async () => {
+  const call = makeClient();
+  for (const path of ['/api/categories', '/api/types', '/api/locations']) {
+    assert.equal((await call(path)).status, 401, `GET ${path} should be protected`);
+    assert.equal((await call(path, { method: 'PUT', body: '{}' })).status, 401, `PUT ${path} should be protected`);
+  }
+});

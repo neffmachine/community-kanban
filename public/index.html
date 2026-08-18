@@ -5,100 +5,320 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Community Kanban</title>
 <style>
-  :root{--bg:#14140f;--surface:#1e1e18;--border:#33332a;--text:#f0efe8;--muted:#9a9a8c;--accent:#c2410c;color-scheme:dark}
+  :root{--bg:#14140f;--surface:#1e1e18;--border:#33332a;--text:#f0efe8;--muted:#9a9a8c;--accent:#c2410c;
+        --mono:ui-monospace,SFMono-Regular,Menlo,monospace;color-scheme:dark}
   *{box-sizing:border-box}
   body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
-  header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
-  h1{font-size:16px;margin:0;letter-spacing:.02em}
-  main{max-width:900px;margin:0 auto;padding:20px}
+  header{display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);
+         background:var(--surface);flex-wrap:wrap;position:sticky;top:0;z-index:5}
+  h1{font-size:16px;margin:0;letter-spacing:.02em;white-space:nowrap}
+  main{max-width:1200px;margin:0 auto;padding:20px}
   button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:14px;cursor:pointer}
   button.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
-  input{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:14px}
+  button.link{background:none;border:none;color:var(--muted);padding:4px 6px;font-size:13px;text-decoration:underline}
+  button:hover{filter:brightness(1.15)}
+  input,select,textarea{background:var(--bg);border:1px solid var(--border);color:var(--text);
+                        border-radius:6px;padding:8px 10px;font-size:14px;font-family:inherit}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:-1px}
   table{width:100%;border-collapse:collapse;margin-top:16px}
-  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--border);font-size:14px}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--border);font-size:14px;vertical-align:middle}
   th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-  .pickup{display:inline-block;background:#b26a00;color:#fff4e0;font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px;letter-spacing:.04em}
+  tbody tr:hover{background:#ffffff08}
+  .thumb{width:34px;height:34px;border-radius:6px;object-fit:cover;background:#ffffff0d;display:block}
+  .thumb.ph{display:grid;place-items:center;font-size:15px;color:var(--muted)}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;flex:none;
+       vertical-align:baseline;border:1px solid #0006}
+  .desc{display:flex;align-items:baseline;gap:0}
+  .tag{font-family:var(--mono);font-size:11px;background:#ffffff12;border:1px solid var(--border);
+       padding:2px 7px;border-radius:5px;white-space:nowrap}
+  .qty{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .badge{display:inline-block;font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px;letter-spacing:.04em}
+  .badge.ok{background:#1f3d2b;color:#a6e6bd}
+  .badge.reorder{background:#5a2418;color:#ffb9a3}
+  .badge.ordered{background:#2c3a5c;color:#b3c9ff}
+  .pickup{background:#b26a00;color:#fff4e0;margin-left:6px}
+  .muted{color:var(--muted)}
+  .grow{flex:1;min-width:140px}
   .card{max-width:340px;margin:12vh auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px}
   .card h2{margin:0 0 4px;font-size:18px}.card p{color:var(--muted);font-size:13px;margin:0 0 18px}
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
-  label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:4px}
   .err{color:#f0806a;font-size:13px;min-height:18px}
+  .empty{color:var(--muted);padding:28px 8px;text-align:center}
+  dialog{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:12px;
+         padding:0;max-width:680px;width:calc(100% - 32px)}
+  dialog::backdrop{background:#000a}
+  .dlg-head{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border)}
+  .dlg-head h3{margin:0;font-size:15px}
+  .dlg-body{padding:20px;max-height:65vh;overflow:auto}
+  .dlg-foot{display:flex;justify-content:space-between;gap:8px;padding:14px 20px;border-top:1px solid var(--border)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+  .grid .full{grid-column:1/-1}
+  .cfg-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .cfg-row input[type=color]{padding:2px;width:44px;height:36px}
+  h4{margin:20px 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  h4:first-child{margin-top:0}
 </style>
 </head>
 <body>
 <div id="app"></div>
-<script>
+
+<script type="module">
+import { filterItems, distinctValues } from './filters.mjs';
+
 const $ = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstChild; };
 const api = (path, opts) => fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+const getJSON = async (path) => (await api(path)).json();
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const render = (el) => { const a = document.getElementById('app'); a.innerHTML = ''; a.append(el); };
+
+// Everything the page needs, refetched whenever a change lands.
+const state = { shop: '', items: [], cells: {}, types: {}, locations: [], query: '', category: '', supplier: '' };
 
 async function boot() {
   const me = await api('/api/me');
-  if (me.ok) return showApp((await me.json()).shop);
-  showLogin();
+  if (!me.ok) return showLogin();
+  state.shop = (await me.json()).shop;
+  await loadAll();
+  showApp();
+}
+
+async function loadAll() {
+  const [items, cells, types, locations] = await Promise.all([
+    getJSON('/api/items'), getJSON('/api/categories'), getJSON('/api/types'), getJSON('/api/locations'),
+  ]);
+  Object.assign(state, { items, cells, types, locations });
 }
 
 function showLogin(msg = '') {
   const el = $(`<div class="card">
     <h2>Community Kanban</h2><p>Enter the shop password.</p>
-    <div class="row"><input id="pw" type="password" placeholder="Shop password" style="flex:1"><button id="go">Sign in</button></div>
-    <div class="err" id="err">${msg}</div>
+    <div class="row"><input id="pw" type="password" placeholder="Shop password" class="grow"><button id="go">Sign in</button></div>
+    <div class="err" id="err">${esc(msg)}</div>
   </div>`);
-  el.querySelector('#go').onclick = async () => {
+  const submit = async () => {
     const r = await api('/api/login', { method: 'POST', body: JSON.stringify({ password: el.querySelector('#pw').value }) });
     if (r.ok) boot(); else showLogin('Wrong password — try again.');
   };
-  el.querySelector('#pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') el.querySelector('#go').click(); });
+  el.querySelector('#go').onclick = submit;
+  el.querySelector('#pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   render(el);
+  el.querySelector('#pw').focus();
 }
 
-async function showApp(shop) {
-  const items = await (await api('/api/items')).json();
+function showApp() {
   const el = $(`<div>
-    <header><h1>${esc(shop)} · Kanban</h1><button class="ghost" id="out">Sign out</button></header>
+    <header>
+      <h1>${esc(state.shop)} · Kanban</h1>
+      <input id="q" placeholder="Search items…" class="grow" value="${esc(state.query)}">
+      <select id="fc"></select>
+      <select id="fv"></select>
+      <button id="new">+ Item</button>
+      <button class="ghost" id="cfg">Settings</button>
+      <button class="ghost" id="out">Sign out</button>
+    </header>
     <main>
-      <div class="row">
-        <input id="d" placeholder="New item description" style="flex:1;min-width:180px">
-        <input id="s" placeholder="Part # / SKU" style="width:130px">
-        <input id="v" placeholder="Vendor" style="width:130px">
-        <label><input type="checkbox" id="p"> Pickup (physical run)</label>
-        <button id="add">Add</button>
-      </div>
-      <table><thead><tr><th>Description</th><th>Part #</th><th>Vendor</th><th></th><th></th></tr></thead>
-      <tbody id="rows"></tbody></table>
+      <div id="count" class="muted" style="font-size:12px"></div>
+      <table>
+        <thead><tr>
+          <th style="width:44px"></th><th>Description</th><th>Part #</th><th>Vendor</th>
+          <th>Location</th><th>Min / Reorder</th><th>Status</th><th style="width:120px"></th>
+        </tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
     </main>
   </div>`);
-  const rows = el.querySelector('#rows');
-  const paint = (list) => {
+
+  const q = el.querySelector('#q'), fc = el.querySelector('#fc'), fv = el.querySelector('#fv');
+  const fillFilters = () => {
+    fc.innerHTML = '<option value="">All cells</option>' + Object.entries(state.cells)
+      .map(([color, c]) => `<option value="${esc(color)}"${state.category === color ? ' selected' : ''}>${esc(c.label || color)}</option>`).join('');
+    fv.innerHTML = '<option value="">All vendors</option>' + distinctValues(state.items, 'supplier')
+      .map((v) => `<option value="${esc(v)}"${state.supplier === v ? ' selected' : ''}>${esc(v)}</option>`).join('');
+  };
+
+  const paint = () => {
+    const list = filterItems(state.items, { query: state.query, category: state.category, supplier: state.supplier });
+    const rows = el.querySelector('#rows');
     rows.innerHTML = '';
-    if (!list.length) rows.append($(`<tr><td colspan="5" style="color:var(--muted)">No items yet — add your first above.</td></tr>`));
-    for (const it of list) {
-      const tr = $(`<tr><td>${esc(it.description)} ${it.physicalReorder ? '<span class="pickup">🏃 PICKUP</span>' : ''}</td>
-        <td>${esc(it.sku || '—')}</td><td>${esc(it.supplier || '—')}</td>
-        <td><button class="ghost" data-t="${it.id}">${it.physicalReorder ? 'Unflag' : 'Flag pickup'}</button></td>
-        <td><button class="ghost" data-x="${it.id}">Delete</button></td></tr>`);
-      tr.querySelector('[data-x]').onclick = async () => { await api('/api/items/' + it.id, { method: 'DELETE' }); reload(); };
-      tr.querySelector('[data-t]').onclick = async () => {
-        await api('/api/items/' + it.id, { method: 'PUT', body: JSON.stringify({ physicalReorder: !it.physicalReorder }) }); reload();
-      };
-      rows.append(tr);
+    el.querySelector('#count').textContent =
+      `${list.length} of ${state.items.length} item${state.items.length === 1 ? '' : 's'}`;
+
+    if (!state.items.length) {
+      rows.append($(`<tr><td colspan="8" class="empty">No items yet — add your first with <b>+ Item</b>.</td></tr>`));
+      return;
     }
+    if (!list.length) {
+      rows.append($(`<tr><td colspan="8" class="empty">Nothing matches that search or filter.</td></tr>`));
+      return;
+    }
+    for (const it of list) rows.append(itemRow(it));
   };
-  const reload = async () => paint(await (await api('/api/items')).json());
-  paint(items);
-  el.querySelector('#add').onclick = async () => {
-    const body = { description: el.querySelector('#d').value, sku: el.querySelector('#s').value,
-      supplier: el.querySelector('#v').value, physicalReorder: el.querySelector('#p').checked };
-    if (!body.description.trim()) return;
-    await api('/api/items', { method: 'POST', body: JSON.stringify(body) });
-    el.querySelector('#d').value = el.querySelector('#s').value = el.querySelector('#v').value = '';
-    el.querySelector('#p').checked = false; reload();
+
+  const itemRow = (it) => {
+    const cell = state.cells[it.category];
+    const status = ['ok', 'reorder', 'ordered'].includes(it.status) ? it.status : 'ok';
+    const units = [
+      `${it.minStock ?? ''}${it.minUnit ? ' ' + esc(it.minUnit) : ''}`,
+      `${it.reorderQty ?? ''}${it.reorderUnit ? ' ' + esc(it.reorderUnit) : ''}`,
+    ].join(' / ');
+    const tr = $(`<tr>
+      <td>${it.photo
+        ? `<img class="thumb" src="${esc(it.photo)}" alt="">`
+        : '<div class="thumb ph">□</div>'}</td>
+      <td><span class="desc"><span class="dot" style="background:${esc(it.category || '#6b7280')}" title="${esc(cell ? cell.label : 'Uncategorised')}"></span>
+        <span>${esc(it.description)}${it.itemType ? ` <span class="muted">· ${esc(it.itemType)}</span>` : ''}
+        ${it.physicalReorder ? '<span class="badge pickup">PICKUP</span>' : ''}</span></span></td>
+      <td class="qty">${esc(it.sku || '—')}</td>
+      <td>${esc(it.supplier || '—')}</td>
+      <td>${it.bin ? `<span class="tag">${esc(it.bin)}</span>` : '<span class="muted">—</span>'}</td>
+      <td class="qty">${units}</td>
+      <td><span class="badge ${status}">${status.toUpperCase()}</span></td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="link" data-edit>Edit</button><button class="link" data-del>Delete</button></td>
+    </tr>`);
+    tr.querySelector('[data-edit]').onclick = () => itemDialog(it);
+    tr.querySelector('[data-del]').onclick = async () => {
+      if (!confirm(`Delete "${it.description}"?`)) return;
+      await api('/api/items/' + it.id, { method: 'DELETE' });
+      await refresh();
+    };
+    return tr;
   };
+
+  q.addEventListener('input', () => { state.query = q.value; paint(); });
+  fc.addEventListener('change', () => { state.category = fc.value; paint(); });
+  fv.addEventListener('change', () => { state.supplier = fv.value; paint(); });
+  el.querySelector('#new').onclick = () => itemDialog(null);
+  el.querySelector('#cfg').onclick = () => settingsDialog();
   el.querySelector('#out').onclick = async () => { await api('/api/logout', { method: 'POST' }); showLogin(); };
+
   render(el);
+  fillFilters();
+  paint();
 }
 
-function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-function render(el){const a=document.getElementById('app');a.innerHTML='';a.append(el);}
+// Reload data and repaint, keeping the current search and filters.
+async function refresh() {
+  await loadAll();
+  showApp();
+}
+
+function openDialog(title, bodyHTML, footHTML) {
+  const dlg = $(`<dialog>
+    <form method="dialog" class="dlg-head"><h3>${esc(title)}</h3><button class="ghost" value="cancel">Close</button></form>
+    <div class="dlg-body">${bodyHTML}</div>
+    <div class="dlg-foot">${footHTML}</div>
+  </dialog>`);
+  document.body.append(dlg);
+  dlg.addEventListener('close', () => dlg.remove());
+  dlg.showModal();
+  return dlg;
+}
+
+function itemDialog(item) {
+  const it = item || {};
+  const cellOptions = Object.entries(state.cells)
+    .map(([color, c]) => `<option value="${esc(color)}"${it.category === color ? ' selected' : ''}>${esc(c.label || color)}</option>`).join('');
+  const dlg = openDialog(item ? 'Edit item' : 'New item', `
+    <div class="grid">
+      <div class="full"><label>Description</label><input id="f-description" value="${esc(it.description)}" style="width:100%"></div>
+      <div><label>Part # / SKU</label><input id="f-sku" value="${esc(it.sku)}" style="width:100%"></div>
+      <div><label>Vendor</label><input id="f-supplier" list="dl-vendors" value="${esc(it.supplier)}" style="width:100%"></div>
+      <div><label>Item type</label><input id="f-itemType" list="dl-types" value="${esc(it.itemType)}" style="width:100%"></div>
+      <div><label>Cell</label><select id="f-category" style="width:100%">${cellOptions}</select></div>
+      <div><label>Location</label><input id="f-bin" list="dl-locations" value="${esc(it.bin)}" style="width:100%"></div>
+      <div><label>Price</label><input id="f-price" type="number" step="0.01" value="${esc(it.price ?? 0)}" style="width:100%"></div>
+      <div><label>Min stock</label><input id="f-minStock" type="number" value="${esc(it.minStock ?? 1)}" style="width:100%"></div>
+      <div><label>Min unit</label><input id="f-minUnit" placeholder="ea, ft, box" value="${esc(it.minUnit)}" style="width:100%"></div>
+      <div><label>Reorder qty</label><input id="f-reorderQty" type="number" value="${esc(it.reorderQty ?? 1)}" style="width:100%"></div>
+      <div><label>Reorder unit</label><input id="f-reorderUnit" placeholder="box of 10" value="${esc(it.reorderUnit)}" style="width:100%"></div>
+      <div class="full"><label>Product URL</label><input id="f-url" value="${esc(it.url)}" style="width:100%"></div>
+      <div class="full"><label>Photo URL</label><input id="f-photo" value="${esc(it.photo)}" style="width:100%"></div>
+      <div class="full"><label><input type="checkbox" id="f-physicalReorder"${it.physicalReorder ? ' checked' : ''}> Pickup — restocked by a physical run, not an online order</label></div>
+    </div>
+    <datalist id="dl-vendors">${distinctValues(state.items, 'supplier').map((v) => `<option value="${esc(v)}">`).join('')}</datalist>
+    <datalist id="dl-types">${Object.keys(state.types).map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
+    <datalist id="dl-locations">${state.locations.map((l) => `<option value="${esc(l)}">`).join('')}</datalist>
+    <div class="err" id="f-err"></div>
+  `, `<span></span><button id="save">${item ? 'Save changes' : 'Add item'}</button>`);
+
+  const val = (k) => dlg.querySelector('#f-' + k).value;
+  dlg.querySelector('#save').onclick = async () => {
+    const body = {
+      description: val('description'), sku: val('sku'), supplier: val('supplier'),
+      itemType: val('itemType'), category: val('category'), bin: val('bin'),
+      price: val('price'), minStock: val('minStock'), minUnit: val('minUnit'),
+      reorderQty: val('reorderQty'), reorderUnit: val('reorderUnit'),
+      url: val('url'), photo: val('photo') || null,
+      physicalReorder: dlg.querySelector('#f-physicalReorder').checked,
+    };
+    if (!body.description.trim()) { dlg.querySelector('#f-err').textContent = 'Description is required.'; return; }
+    const res = item
+      ? await api('/api/items/' + item.id, { method: 'PUT', body: JSON.stringify(body) })
+      : await api('/api/items', { method: 'POST', body: JSON.stringify(body) });
+    if (!res.ok) { dlg.querySelector('#f-err').textContent = 'Could not save — ' + res.status; return; }
+    dlg.close();
+    await refresh();
+  };
+  dlg.querySelector('#f-description').focus();
+}
+
+function settingsDialog() {
+  const dlg = openDialog('Settings', `
+    <h4>Cells</h4><div id="cells"></div><button class="ghost" id="add-cell">Add cell</button>
+    <h4>Locations</h4><div id="locs"></div><button class="ghost" id="add-loc">Add location</button>
+    <h4>Item types</h4><div id="types"></div><button class="ghost" id="add-type">Add type</button>
+    <div class="err" id="s-err"></div>
+  `, `<span class="muted" style="font-size:12px;align-self:center">Saving replaces each list.</span><button id="save">Save settings</button>`);
+
+  const cells = dlg.querySelector('#cells'), locs = dlg.querySelector('#locs'), types = dlg.querySelector('#types');
+  const removable = (row) => {
+    row.querySelector('[data-rm]').onclick = () => row.remove();
+    return row;
+  };
+  const cellRow = (color = '#6b7280', label = '') => removable($(`<div class="cfg-row">
+    <input type="color" value="${esc(color)}" data-color><input placeholder="Cell name" value="${esc(label)}" data-label class="grow">
+    <button class="link" data-rm>Remove</button></div>`));
+  const locRow = (name = '') => removable($(`<div class="cfg-row">
+    <input placeholder="Location name" value="${esc(name)}" data-name class="grow"><button class="link" data-rm>Remove</button></div>`));
+  const typeRow = (name = '', color = '#6b7280') => removable($(`<div class="cfg-row">
+    <input type="color" value="${esc(color)}" data-color><input placeholder="Type name" value="${esc(name)}" data-name class="grow">
+    <button class="link" data-rm>Remove</button></div>`));
+
+  for (const [color, c] of Object.entries(state.cells)) cells.append(cellRow(color, c.label));
+  for (const name of state.locations) locs.append(locRow(name));
+  for (const [name, t] of Object.entries(state.types)) types.append(typeRow(name, t.color));
+
+  dlg.querySelector('#add-cell').onclick = () => cells.append(cellRow());
+  dlg.querySelector('#add-loc').onclick = () => locs.append(locRow());
+  dlg.querySelector('#add-type').onclick = () => types.append(typeRow());
+
+  dlg.querySelector('#save').onclick = async () => {
+    const cellMap = {};
+    for (const r of cells.querySelectorAll('.cfg-row')) {
+      const color = r.querySelector('[data-color]').value;
+      // Keep any subtypes the existing cell already had; this editor doesn't touch them.
+      cellMap[color] = { label: r.querySelector('[data-label]').value.trim(), subtypes: (state.cells[color] || {}).subtypes || {} };
+    }
+    const typeMap = {};
+    for (const r of types.querySelectorAll('.cfg-row')) {
+      const name = r.querySelector('[data-name]').value.trim();
+      if (name) typeMap[name] = { color: r.querySelector('[data-color]').value };
+    }
+    const locList = [...locs.querySelectorAll('[data-name]')].map((i) => i.value);
+
+    const results = await Promise.all([
+      api('/api/categories', { method: 'PUT', body: JSON.stringify(cellMap) }),
+      api('/api/types', { method: 'PUT', body: JSON.stringify(typeMap) }),
+      api('/api/locations', { method: 'PUT', body: JSON.stringify(locList) }),
+    ]);
+    if (results.some((r) => !r.ok)) { dlg.querySelector('#s-err').textContent = 'Some settings did not save.'; return; }
+    dlg.close();
+    await refresh();
+  };
+}
+
 boot();
 </script>
 </body>

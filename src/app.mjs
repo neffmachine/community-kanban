@@ -13,17 +13,21 @@ function normalizeItem(body = {}) {
     supplier: s(body.supplier),
     minStock: parseInt(body.minStock, 10) || 1,
     reorderQty: parseInt(body.reorderQty, 10) || 1,
+    minUnit: s(body.minUnit),
+    reorderUnit: s(body.reorderUnit),
     price: parseFloat(body.price) || 0,
     bin: s(body.bin),
     url: s(body.url),
+    itemType: s(body.itemType),
     category: body.category || '#6b7280',
     photo: body.photo || null,
     physicalReorder: b01(body.physicalReorder),
   };
 }
 
-const ITEM_COLS = ['sku', 'description', 'supplier', 'minStock', 'reorderQty', 'price',
-  'bin', 'url', 'category', 'photo', 'physicalReorder'];
+const ITEM_COLS = ['sku', 'description', 'supplier', 'minStock', 'reorderQty',
+  'minUnit', 'reorderUnit', 'price', 'bin', 'url', 'itemType', 'category', 'photo',
+  'physicalReorder'];
 
 export function createApp({ db, config }) {
   const app = new Hono();
@@ -82,7 +86,62 @@ export function createApp({ db, config }) {
     return c.json({ ok: true });
   });
 
-  app.get('/api/categories', async (c) => c.json(await db.all('SELECT * FROM categories ORDER BY label')));
+  // Cells, item types and locations are small config collections. Each GET
+  // returns the whole thing and each PUT replaces it — the shape the production
+  // app uses, and what the editors on the frontend expect.
+  app.get('/api/categories', async (c) => {
+    const out = {};
+    for (const r of await db.all('SELECT * FROM categories ORDER BY label')) {
+      out[r.color] = { label: r.label, subtypes: JSON.parse(r.subtypes || '{}') };
+    }
+    return c.json(out);
+  });
+
+  app.put('/api/categories', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return c.json({ error: 'Expected an object keyed by colour' }, 400);
+    }
+    await db.run('DELETE FROM categories');
+    for (const [color, val] of Object.entries(body)) {
+      const label = (val && typeof val === 'object') ? (val.label || '') : String(val ?? '');
+      const subtypes = (val && typeof val === 'object' && val.subtypes) ? JSON.stringify(val.subtypes) : '{}';
+      await db.run('INSERT OR REPLACE INTO categories (color, label, subtypes) VALUES (?,?,?)',
+        [color, label, subtypes]);
+    }
+    return c.json(body);
+  });
+
+  app.get('/api/types', async (c) => {
+    const out = {};
+    for (const r of await db.all('SELECT * FROM itemTypes ORDER BY name')) out[r.name] = { color: r.color };
+    return c.json(out);
+  });
+
+  app.put('/api/types', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return c.json({ error: 'Expected an object keyed by type name' }, 400);
+    }
+    await db.run('DELETE FROM itemTypes');
+    for (const [name, val] of Object.entries(body)) {
+      const color = ((val && typeof val === 'object') ? val.color : val) || '#6b7280';
+      await db.run('INSERT OR REPLACE INTO itemTypes (name, color) VALUES (?,?)', [name, color]);
+    }
+    return c.json(body);
+  });
+
+  app.get('/api/locations', async (c) =>
+    c.json((await db.all('SELECT name FROM locations ORDER BY name')).map((r) => r.name)));
+
+  app.put('/api/locations', async (c) => {
+    const body = await c.req.json().catch(() => ([]));
+    if (!Array.isArray(body)) return c.json({ error: 'Expected an array of names' }, 400);
+    const names = [...new Set(body.map((n) => String(n ?? '').trim()).filter(Boolean))];
+    await db.run('DELETE FROM locations');
+    for (const name of names) await db.run('INSERT OR IGNORE INTO locations (name) VALUES (?)', [name]);
+    return c.json(names);
+  });
 
   app.get('/api/settings', async (c) => {
     const rows = await db.all('SELECT key, value FROM settings');
