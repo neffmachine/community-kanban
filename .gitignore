@@ -1,0 +1,16 @@
+# Secrets & local config — never commit these
+.env
+.env.local
+SETUP-NEXT-STEPS.md
+wrangler.toml
+
+# Local database & data
+data/
+*.db
+*.db-journal
+*.sqlite
+
+# Dependencies & build
+node_modules/
+.wrangler/
+dist/

@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shop Kanban</title>
+<style>
+  :root{--bg:#14140f;--surface:#1e1e18;--border:#33332a;--text:#f0efe8;--muted:#9a9a8c;--accent:#c2410c;color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text)}
+  header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+  h1{font-size:16px;margin:0;letter-spacing:.02em}
+  main{max-width:900px;margin:0 auto;padding:20px}
+  button{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:8px 14px;font-size:14px;cursor:pointer}
+  button.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
+  input{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:14px}
+  table{width:100%;border-collapse:collapse;margin-top:16px}
+  th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--border);font-size:14px}
+  th{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
+  .pickup{display:inline-block;background:#b26a00;color:#fff4e0;font-size:9px;font-weight:700;padding:2px 7px;border-radius:100px;letter-spacing:.04em}
+  .card{max-width:340px;margin:12vh auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px}
+  .card h2{margin:0 0 4px;font-size:18px}.card p{color:var(--muted);font-size:13px;margin:0 0 18px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px}
+  label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--muted)}
+  .err{color:#f0806a;font-size:13px;min-height:18px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+const $ = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstChild; };
+const api = (path, opts) => fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
+
+async function boot() {
+  const me = await api('/api/me');
+  if (me.ok) return showApp((await me.json()).shop);
+  showLogin();
+}
+
+function showLogin(msg = '') {
+  const el = $(`<div class="card">
+    <h2>Shop Kanban</h2><p>Enter the shop password.</p>
+    <div class="row"><input id="pw" type="password" placeholder="Shop password" style="flex:1"><button id="go">Sign in</button></div>
+    <div class="err" id="err">${msg}</div>
+  </div>`);
+  el.querySelector('#go').onclick = async () => {
+    const r = await api('/api/login', { method: 'POST', body: JSON.stringify({ password: el.querySelector('#pw').value }) });
+    if (r.ok) boot(); else showLogin('Wrong password — try again.');
+  };
+  el.querySelector('#pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') el.querySelector('#go').click(); });
+  render(el);
+}
+
+async function showApp(shop) {
+  const items = await (await api('/api/items')).json();
+  const el = $(`<div>
+    <header><h1>${esc(shop)} · Kanban</h1><button class="ghost" id="out">Sign out</button></header>
+    <main>
+      <div class="row">
+        <input id="d" placeholder="New item description" style="flex:1;min-width:180px">
+        <input id="s" placeholder="Part # / SKU" style="width:130px">
+        <input id="v" placeholder="Vendor" style="width:130px">
+        <label><input type="checkbox" id="p"> Pickup (physical run)</label>
+        <button id="add">Add</button>
+      </div>
+      <table><thead><tr><th>Description</th><th>Part #</th><th>Vendor</th><th></th><th></th></tr></thead>
+      <tbody id="rows"></tbody></table>
+    </main>
+  </div>`);
+  const rows = el.querySelector('#rows');
+  const paint = (list) => {
+    rows.innerHTML = '';
+    if (!list.length) rows.append($(`<tr><td colspan="5" style="color:var(--muted)">No items yet — add your first above.</td></tr>`));
+    for (const it of list) {
+      const tr = $(`<tr><td>${esc(it.description)} ${it.physicalReorder ? '<span class="pickup">🏃 PICKUP</span>' : ''}</td>
+        <td>${esc(it.sku || '—')}</td><td>${esc(it.supplier || '—')}</td>
+        <td><button class="ghost" data-t="${it.id}">${it.physicalReorder ? 'Unflag' : 'Flag pickup'}</button></td>
+        <td><button class="ghost" data-x="${it.id}">Delete</button></td></tr>`);
+      tr.querySelector('[data-x]').onclick = async () => { await api('/api/items/' + it.id, { method: 'DELETE' }); reload(); };
+      tr.querySelector('[data-t]').onclick = async () => {
+        await api('/api/items/' + it.id, { method: 'PUT', body: JSON.stringify({ physicalReorder: !it.physicalReorder }) }); reload();
+      };
+      rows.append(tr);
+    }
+  };
+  const reload = async () => paint(await (await api('/api/items')).json());
+  paint(items);
+  el.querySelector('#add').onclick = async () => {
+    const body = { description: el.querySelector('#d').value, sku: el.querySelector('#s').value,
+      supplier: el.querySelector('#v').value, physicalReorder: el.querySelector('#p').checked };
+    if (!body.description.trim()) return;
+    await api('/api/items', { method: 'POST', body: JSON.stringify(body) });
+    el.querySelector('#d').value = el.querySelector('#s').value = el.querySelector('#v').value = '';
+    el.querySelector('#p').checked = false; reload();
+  };
+  el.querySelector('#out').onclick = async () => { await api('/api/logout', { method: 'POST' }); showLogin(); };
+  render(el);
+}
+
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function render(el){const a=document.getElementById('app');a.innerHTML='';a.append(el);}
+boot();
+</script>
+</body>
+</html>

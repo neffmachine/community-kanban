@@ -1,0 +1,24 @@
+{
+  "name": "shop-kanban",
+  "version": "0.1.0",
+  "description": "Self-hosted kanban inventory for machine shops. Run it locally or on your own Cloudflare account — you host your own data.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "setup": "node setup.mjs",
+    "dev": "node --env-file=.env server.mjs",
+    "start": "node --env-file=.env server.mjs",
+    "test": "node --test",
+    "deploy": "wrangler pages deploy public --branch main"
+  },
+  "dependencies": {
+    "hono": "^4.12.0",
+    "@hono/node-server": "^1.13.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

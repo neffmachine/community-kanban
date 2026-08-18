@@ -1,0 +1,35 @@
+name: CI
+
+# Matches this app's stack: Node (ESM) + Hono, node:test, built-in node:sqlite.
+# Node 22+ is required for node:sqlite and --env-file. No E2E/coverage yet.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Audit + Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Security audit gates the build — a vulnerability fails before tests run.
+      - name: Audit dependencies
+        run: npm audit --audit-level=moderate
+
+      - name: Unit tests
+        run: npm test
