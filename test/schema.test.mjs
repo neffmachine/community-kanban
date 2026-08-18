@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createSqliteDb } from '../src/db/sqlite.mjs';
-import { missingColumnStatements } from '../src/db/migrate.mjs';
+import { missingColumnStatements, ADDED_COLUMNS } from '../src/db/migrate.mjs';
 
 const withTempDb = (fn) => {
   const dir = mkdtempSync(join(tmpdir(), 'ck-test-'));
@@ -50,14 +50,17 @@ test('a fresh database has the cells, locations and item-type tables', async () 
 });
 
 test('missingColumnStatements returns only what is absent', () => {
-  const all = ['minUnit', 'reorderUnit', 'itemType'];
-  // none present → all three
-  assert.equal(missingColumnStatements('items', []).length, 3);
-  // one present → two
-  assert.equal(missingColumnStatements('items', ['minUnit']).length, 2);
-  // two present → one, and it is the right one
-  const one = missingColumnStatements('items', ['minUnit', 'itemType']);
-  assert.deepEqual(one, ["ALTER TABLE items ADD COLUMN reorderUnit TEXT NOT NULL DEFAULT ''"]);
+  const all = Object.keys(ADDED_COLUMNS.items);
+  assert.ok(all.length >= 3, 'expected several managed columns');
+  // none present → every one of them
+  assert.equal(missingColumnStatements('items', []).length, all.length);
+  // one present → the rest
+  assert.equal(missingColumnStatements('items', [all[0]]).length, all.length - 1);
+  // all but one present → exactly that one, named in the statement
+  const missing = all[1];
+  const one = missingColumnStatements('items', all.filter((c) => c !== missing));
+  assert.equal(one.length, 1);
+  assert.match(one[0], new RegExp(`^ALTER TABLE items ADD COLUMN ${missing} `));
   // all present → none, so re-running is safe
   assert.deepEqual(missingColumnStatements('items', all), []);
   // unknown table → none
@@ -78,12 +81,16 @@ test('opening an older database adds the new columns and keeps the rows', () => 
       createdAt TEXT, updatedAt TEXT)`);
     old.prepare("INSERT INTO items (description, sku) VALUES ('Carbide endmill', 'EM-250')").run();
     old.close();
-    assert.equal(columnsOf(path, 'items').includes('itemType'), false);
+    for (const col of Object.keys(ADDED_COLUMNS.items)) {
+      assert.equal(columnsOf(path, 'items').includes(col), false, `${col} should be absent before migrating`);
+    }
 
     createSqliteDb(path);
 
     const after = columnsOf(path, 'items');
-    for (const col of ['minUnit', 'reorderUnit', 'itemType']) assert.ok(after.includes(col));
+    for (const col of Object.keys(ADDED_COLUMNS.items)) {
+      assert.ok(after.includes(col), `migration did not add ${col}`);
+    }
     const raw = new DatabaseSync(path);
     const rows = raw.prepare('SELECT description, sku, itemType FROM items').all().map((r) => ({ ...r }));
     raw.close();

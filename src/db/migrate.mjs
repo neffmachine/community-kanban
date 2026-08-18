@@ -15,6 +15,9 @@ export const ADDED_COLUMNS = {
     minUnit: "TEXT NOT NULL DEFAULT ''",
     reorderUnit: "TEXT NOT NULL DEFAULT ''",
     itemType: "TEXT NOT NULL DEFAULT ''",
+    syncGroup: 'TEXT',
+    lastOrdered: 'TEXT',
+    lastReceived: 'TEXT',
   },
 };
 

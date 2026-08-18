@@ -13,14 +13,18 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export function createSqliteDb(dbPath) {
   mkdirSync(dirname(dbPath), { recursive: true });
   const raw = new DatabaseSync(dbPath);
-  // Apply the schema on every boot; every statement is IF NOT EXISTS, so it's a no-op once created.
-  raw.exec(readFileSync(join(HERE, 'schema.sql'), 'utf8'));
-  // Then add any columns a database created by an earlier version is missing.
-  // No-op on a fresh database, where schema.sql already made them.
+  // Add any columns an older database is missing, BEFORE applying the schema:
+  // schema.sql builds indexes over columns like syncGroup, and indexing a column
+  // that isn't there yet fails the whole boot. A table with no rows in
+  // table_info doesn't exist yet, so there is nothing to migrate — schema.sql
+  // below will create it complete.
   for (const table of Object.keys(ADDED_COLUMNS)) {
     const present = raw.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name);
+    if (!present.length) continue;
     for (const sql of missingColumnStatements(table, present)) raw.exec(sql);
   }
+  // Apply the schema; every statement is IF NOT EXISTS, so it's a no-op once created.
+  raw.exec(readFileSync(join(HERE, 'schema.sql'), 'utf8'));
 
   return {
     async all(sql, params = []) {
