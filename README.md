@@ -51,6 +51,26 @@ npm run seed:sample            # five clearly-labelled example items
 npm run seed:sample -- --clear # remove them again
 ```
 
+## Keeping it running
+
+The quick-start above ties the app to a terminal window — close it and the app
+stops. That's fine while you're trying it out, and wrong for a shop PC people
+depend on. Once you've decided to keep it, double-click:
+
+- **Install as background service.command** (macOS)
+- **Install as background service.bat** (Windows)
+
+After that it starts when the machine logs in, runs with no window open, and
+restarts itself if it ever stops. Close every terminal you like.
+
+Neither needs admin rights and neither installs anything system-wide. macOS
+uses a launch agent in `~/Library/LaunchAgents`; Windows writes a small startup
+script into your Startup folder. The matching **Uninstall background
+service** file removes it again and leaves your data alone.
+
+Logs: `~/Library/Logs/CommunityKanban.log` on macOS. On Windows, stop the
+service and run the plain launcher to see errors in the window.
+
 Full details and troubleshooting: **[docs/HOSTING.md](docs/HOSTING.md)**.
 
 ## What it does
@@ -115,6 +135,7 @@ responsible for your backups.
 
 ```
 Start Community Kanban.command / .bat   Double-click launcher (macOS / Windows)
+Install/Uninstall background service.*  Keep it running without a window open
 setup.mjs              Setup wizard (local vs Cloudflare)
 server.mjs             Local host entry (Node + node:sqlite)
 functions/             Cloudflare host entry (Pages Functions + D1)
