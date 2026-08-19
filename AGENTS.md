@@ -72,22 +72,17 @@ Source and pattern list: https://github.com/coo-quack/sensitive-canary
 
 ### 3. Check that skills are in the right place
 
-Scan the repository root for skills and commands sitting in folders that don't
-match this tool. The kit ships the same skills in six different layouts so
-every AI tool can find them:
+This repository carries **one** copy of the skills, in the Claude Code layout:
 
-- `.claude/skills/<name>/SKILL.md` — Claude Code
-- `.agents/skills/<name>/SKILL.md` — OpenAI Codex
-- `.gemini/commands/<name>.toml` — Gemini CLI
-- `.cursor/commands/<name>.md` — Cursor
-- `.windsurf/workflows/<name>.md` — Windsurf
-- `.github/prompts/<name>.prompt.md` — GitHub Copilot
+- `.claude/skills/<name>/SKILL.md`
 
-If your tool can't see the skills (e.g. the user asks "what skills do I have?" and you
-find nothing in the folder your tool reads from), look in the other five folders, tell
-the user what you found, and offer to move or copy the files into the right location
-for their tool. Don't silently ignore skills that are sitting in the wrong folder — the
-user almost certainly wants them available.
+The kit ships the same skills in six layouts (Codex's `.agents/`, Gemini's
+`.gemini/`, Cursor's `.cursor/`, Windsurf's `.windsurf/`, Copilot's
+`.github/prompts/`). The other five were removed here: they were byte-identical
+duplicates, and this is a repo strangers read to run an inventory app, not a
+showcase of editor configs. If you are working in one of those tools and want
+the slash commands, copy `.claude/skills/` into the layout your tool expects —
+or just read the `SKILL.md` files directly, which works everywhere.
 
 **Where skills actually run.** Skills only fire as `/jgl-*` slash commands
 inside the **local CLI** version of each tool (Claude Code, Cursor in
@@ -128,7 +123,7 @@ initial commit at most), assume the user wants to scaffold. Default flow:
 3. Wire up testing immediately — never finish scaffolding without at
    least one real unit test running. Use `/jgl-setup-testing` if available.
 4. Set up CI (`.github/workflows/ci.yml`) before the first feature commit.
-   See `TESTING-PIPELINE.md` if you're using the default Vitest+Playwright
+   See `docs/TESTING-PIPELINE.md` if you're using the default Vitest+Playwright
    stack; otherwise wire CI for whatever framework you chose.
 5. If the project will hold any API keys or secrets, mention the optional
    secrets module — `/jgl-setup-secrets` (SOPS + age; see `SECRETS-PIPELINE.md`).
@@ -320,7 +315,7 @@ footnote.
 
 - **Start simple**: use Vitest's built-in coverage (`vitest run --coverage`) from day one. This is enough to get started and see which code is tested.
 - **Add E2E coverage later**: once the project has Playwright E2E tests, add coverage collection with `monocart-reporter` and a coverage fixture gated behind an `E2E_COVERAGE` environment variable.
-- **Then merge**: use `monocart-coverage-reports` to combine unit and E2E raw V8 data into a single report. Organize output by type: `coverage/unit/`, `coverage/e2e/`, `coverage/merged/`. See `TESTING-PIPELINE.md` for the full implementation guide.
+- **Then merge**: use `monocart-coverage-reports` to combine unit and E2E raw V8 data into a single report. Organize output by type: `coverage/unit/`, `coverage/e2e/`, `coverage/merged/`. See `docs/TESTING-PIPELINE.md` for the full implementation guide.
 
 **If you're in a Jest/pytest/etc. project**, use that ecosystem's coverage tooling (`jest --coverage`, `pytest-cov`, etc.). The principles above still apply; the commands and config differ.
 
@@ -338,7 +333,7 @@ footnote.
 **Default for this stack** (GitHub Actions + Vitest + Playwright):
 
 - Recommended pipeline order: install → `npm audit` → type check → unit tests with coverage → install Playwright browsers → E2E tests with coverage → merge coverage reports → upload artifacts.
-- See `TESTING-PIPELINE.md` for a complete, ready-to-copy CI workflow.
+- See `docs/TESTING-PIPELINE.md` for a complete, ready-to-copy CI workflow.
 
 **If you're on GitLab CI / CircleCI / Vercel / Jest**, the order is the same; the YAML syntax and test runner change.
 
@@ -427,4 +422,4 @@ coverage/unit/raw/               coverage/e2e/raw/
 - E2E coverage collected via a Playwright fixture, gated behind `E2E_COVERAGE` env var so normal runs stay fast.
 - Merge script combines raw V8 data, resolves sourcemap paths, filters to source files only.
 
-See `TESTING-PIPELINE.md` for the full implementation guide with ready-to-copy config files, scripts, and CI workflow.
+See `docs/TESTING-PIPELINE.md` for the full implementation guide with ready-to-copy config files, scripts, and CI workflow.

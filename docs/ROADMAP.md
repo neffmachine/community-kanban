@@ -1,61 +1,48 @@
-# Community Kanban — porting roadmap
+# Roadmap
 
-The starter is the **foundation**: portable login, dual local/Cloudflare database,
-minimal add/list UI. These milestones port the real app onto it, one shippable
-chunk at a time. Each milestone should end green (`npm test`) and runnable
-(`npm run dev`) on both hosts.
+This started as a from-scratch rebuild working through milestones. That was the
+wrong shape: there was already a working app, and the job was to publish a copy
+of it without one shop's data in it. So the plan changed — the real screens and
+the real API were brought across whole, and the milestone list below is kept
+only as a record of what is and isn't done.
 
-Source of truth for the features being ported: the production `neff-kanban` app.
-As each piece comes over it must be **de-Neffed** — no shop name, seeded items,
-Cloudflare-Access assumptions, or hardcoded hosts.
+## Done
 
----
+- **The data model** — the production schema in full: items, cart, orders,
+  cells, item types, locations, activity log, settings.
+- **The screens** — inventory, reorder queue, receiving, cells, item types,
+  locations, activity log, settings, card designer, and the public scan page.
+  Plus label building and the QR scanner.
+- **The API** — items with activity logging and undo, the queue, on-order and
+  receiving, the config collections, the log, QR generation.
+- **A login.** The original has none: locally it trusts the LAN, and in the
+  cloud it sits behind Cloudflare Access — a company SSO layer that doesn't
+  travel. This fork uses a shop password and a signed session, gating the pages
+  themselves so none of them had to change. The scan page stays open, as it must.
+- **Runs both ways** — a shop PC or Cloudflare, from one codebase.
+- **Screenshot import** — optional, off until a shop sets its own API key.
+- **Sample data** — five labelled example items.
 
-## Milestone 1 — Inventory core ✅ done
-The real inventory page in place of the placeholder `public/index.html`.
-- Full item fields (min/reorder units, price, url, photo, itemType, status).
-- Categories/cells (color + label + subtypes) and locations, with their API.
-- Row layout: photo/placeholder icon, category dot, part#, vendor, location tag,
-  min/reorder, status.
-- Search + category/vendor filters.
-- Schema adds: extend `items`; keep `categories`, `locations`.
-**Done when:** you can add/edit/search real items with cells & locations on both hosts.
-**Shipped:** items carry `minUnit`/`reorderUnit`/`itemType`; `categories`, `types`
-and `locations` each have a GET/PUT pair; `public/index.html` is the real item
-page (search, cell/vendor filters, add/edit dialog, config editor). Search and
-filtering live in `public/filters.mjs` so they are unit-tested. Existing
-databases gain the new columns automatically on local, and via
-`src/db/migrations/001-inventory-core.sql` on Cloudflare.
+## Not done yet
 
-## Milestone 2 — Reorder flow
-- Reorder queue ("cart"), min-stock status, mark-ordered, receiving.
-- Schema adds: `cart`, `orders`.
-**Done when:** low items flag for reorder, queue → ordered → received round-trips.
+- `scrape-url` and `import-url` — pull item details from a supplier's product
+  page. Only ever existed in the old file-based server, so they need converting
+  rather than copying, and they carry the SSRF guards that came out of an
+  earlier security pass.
+- `backup` / `backup/download` — export and restore.
+- `duplicate`, `remap-category`, `sync-unlink` — bulk and housekeeping actions.
+- The original test suite (item rules, label building, scraping, SSRF) still
+  needs porting.
+- Input validation on the config endpoints. They replace a whole collection
+  from the request body without checking its shape, so a malformed payload can
+  empty a list. Harmless behind a company SSO gate; less so on the open web.
+- Screenshots in the README, and a tagged release.
 
-## Milestone 3 — Labels & QR (the shop-floor half)
-- `buildLabel` (all sizes) + the label modal & print flow + the pickup flag.
-- QR generation.
-- Public **scan-to-reorder** page — WITHOUT Cloudflare Access. Use an
-  unguessable per-item token route (e.g. `/r/<token>`) so a scanned code works
-  from any phone without exposing the whole app.
-**Done when:** print a card, scan it on a phone, item lands in the reorder queue.
+## Working notes
 
-## Milestone 4 — Power features
-- Bulk edit, photos, the card designer, settings (shop name/logo).
-- Screenshot import — gated on an optional `ANTHROPIC_API_KEY` (off by default).
-**Done when:** a shop can theme it and edit in bulk; AI import works only if keyed.
-
-## Milestone 5 — Release
-- A few README screenshots, an optional demo-data seeder, version tag, and a
-  GitHub release / "Deploy your own" notes.
-**Done when:** a stranger can go from download → running in ~10 minutes.
-
----
-
-### Working notes
-- Keep `src/app.mjs` host-agnostic; anything host-specific goes in the two
-  adapters / two entry points.
+- `src/app.mjs` stays host-agnostic. Anything host-specific belongs in the two
+  adapters or the two entry points.
 - Every ported feature ships with a `node:test` alongside it.
 - Don't reintroduce the label wrapper bug: the pickup flag injects into the
-  card's root element, never a wrapping div (a wrapper's `line-height:0`
-  collapsed card text). See the production fix if in doubt.
+  card's root element, never a wrapping div — a wrapper's `line-height:0`
+  collapsed the card text.
