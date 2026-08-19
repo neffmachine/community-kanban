@@ -22,21 +22,22 @@ only as a record of what is and isn't done.
 - **Runs both ways** — a shop PC or Cloudflare, from one codebase.
 - **Screenshot import** — optional, off until a shop sets its own API key.
 - **Sample data** — five labelled example items.
+- **Import from a supplier's page** — `scrape-url` and `import-url`, with the
+  SSRF guards intact and re-checked on every redirect hop.
+- **Backup** — builds the export on demand and hands it to the browser, rather
+  than writing files onto the server's own disk.
+- **Bulk actions** — duplicate, remap-category, sync-unlink.
+- **The original test suite** — item rules, undo, label building, scraping and
+  SSRF, all ported. 74 tests.
+- **Config endpoints validate their input**, so a malformed request is refused
+  rather than emptying a collection.
 
 ## Not done yet
 
-- `scrape-url` and `import-url` — pull item details from a supplier's product
-  page. Only ever existed in the old file-based server, so they need converting
-  rather than copying, and they carry the SSRF guards that came out of an
-  earlier security pass.
-- `backup` / `backup/download` — export and restore.
-- `duplicate`, `remap-category`, `sync-unlink` — bulk and housekeeping actions.
-- The original test suite (item rules, label building, scraping, SSRF) still
-  needs porting.
-- Input validation on the config endpoints. They replace a whole collection
-  from the request body without checking its shape, so a malformed payload can
-  empty a list. Harmless behind a company SSO gate; less so on the open web.
-- Screenshots in the README, and a tagged release.
+- Screenshots in the README.
+- A tagged release.
+- Per-person accounts. The shop password is one shared secret, which suits a
+  shop floor but records nothing about who did what beyond the activity log.
 
 ## Working notes
 
