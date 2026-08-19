@@ -16,6 +16,7 @@ import QRCode from 'qrcode';
 import { normalizeItemInput, applyUpdate, publicReorderView, buildReverse } from './items.mjs';
 import { checkPassword, makeSession, requireAuth } from './auth.mjs';
 import { importFromScreenshot, howToAddKey } from './screenshot-import.mjs';
+import { scrapeProductUrl } from './scrape.mjs';
 
 const ITEM_INSERT_COLS = ['sku', 'description', 'supplier', 'minStock', 'reorderQty', 'minUnit',
   'reorderUnit', 'price', 'bin', 'url', 'itemType', 'category', 'photo', 'physicalReorder', 'status', 'createdAt'];
@@ -126,7 +127,7 @@ export function createApp({ db, config }) {
       ITEM_INSERT_COLS.map((col) => row[col]));
     const created = await getItem(db, res.lastInsertRowid);
     await logActivity(db, {
-      type: 'add', description: `Added "${created.description}"`, itemId: created.id,
+      type: 'item_add', description: `Added "${created.description}"`, itemId: created.id,
       itemDesc: created.description, reversible: true, reverseData: { itemId: created.id },
     });
     return c.json(created, 201);
@@ -149,7 +150,7 @@ export function createApp({ db, config }) {
       [...ITEM_UPDATE_COLS.map((col) => next[col]), id]);
     const changed = Object.keys(prev).length > 0;
     await logActivity(db, {
-      type: 'edit', description: `Edited "${next.description}"`, itemId: id, itemDesc: next.description,
+      type: 'item_edit', description: `Edited "${next.description}"`, itemId: id, itemDesc: next.description,
       reversible: changed, reverseData: changed ? { itemId: id, prev } : null,
     });
     return c.json({ item: await getItem(db, id) });
@@ -340,6 +341,125 @@ export function createApp({ db, config }) {
     await runAll(db, ops.map((o) => [o.sql, o.params]));
     await db.run('UPDATE activityLog SET reversed = 1 WHERE id = ?', [entry.id]);
     return c.json({ ok: true });
+  });
+
+  // ── Import from a supplier's product page ─────────────────────────────────
+  // Fetching a URL server-side is a capability worth fencing in; the allowlist
+  // and private-address checks live in scrape.mjs.
+  app.post('/api/scrape-url', async (c) => {
+    const { url, source } = await c.req.json().catch(() => ({}));
+    const { status, body } = await scrapeProductUrl({ url, source });
+    return c.json(body, status);
+  });
+
+  // Same fetch, but saves the item rather than handing it back for the form.
+  app.post('/api/import-url', async (c) => {
+    const { url, source } = await c.req.json().catch(() => ({}));
+    const { status, body } = await scrapeProductUrl({ url, source });
+    if (status !== 200) return c.json(body, status);
+
+    const row = {
+      ...normalizeItemInput({
+        sku: body.sku, description: body.description, supplier: body.supplier,
+        price: body.price, url: body.url || url, photo: body.photo,
+      }),
+      status: 'ok',
+      createdAt: new Date().toISOString(),
+    };
+    const res = await db.run(
+      `INSERT INTO items (${ITEM_INSERT_COLS.join(', ')}) VALUES (${ITEM_INSERT_COLS.map(() => '?').join(', ')})`,
+      ITEM_INSERT_COLS.map((col) => row[col]));
+    const created = await getItem(db, res.lastInsertRowid);
+    await logActivity(db, {
+      type: 'item_add', description: `Imported from ${created.supplier || 'a supplier'}: ${created.description}`,
+      itemId: created.id, itemDesc: created.description,
+      reversible: true, reverseData: { itemId: created.id },
+    });
+    return c.json({ success: true, id: created.id, description: created.description });
+  });
+
+  // ── Bulk and housekeeping ─────────────────────────────────────────────────
+  // Copy an item into another cell. The two stay linked by syncGroup so an edit
+  // to shared details can find its siblings; the location is cleared, since the
+  // whole point is that the copy lives somewhere else.
+  app.post('/api/items/:id/duplicate', async (c) => {
+    const id = parseInt(c.req.param('id'), 10);
+    const src = await getItem(db, id);
+    if (!src) return c.json({ error: 'Not found' }, 404);
+
+    const syncGroup = src.syncGroup || crypto.randomUUID();
+    if (!src.syncGroup) await db.run('UPDATE items SET syncGroup = ? WHERE id = ?', [syncGroup, id]);
+
+    const now = new Date().toISOString();
+    const copy = { ...src, syncGroup, bin: '', createdAt: now, updatedAt: now };
+    const cols = [...ITEM_INSERT_COLS, 'syncGroup', 'updatedAt'];
+    const res = await db.run(
+      `INSERT INTO items (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`,
+      cols.map((col) => copy[col]));
+    const created = await getItem(db, res.lastInsertRowid);
+    await logActivity(db, {
+      type: 'item_add', description: `Duplicated item: ${created.description}`,
+      itemId: created.id, itemDesc: created.description,
+      reversible: true, reverseData: { itemId: created.id },
+    });
+    return c.json({ item: created, sourceUpdated: await getItem(db, id) }, 201);
+  });
+
+  // Recolour every item in a cell at once — used when a cell's colour changes,
+  // since colour is the cell's identity.
+  app.post('/api/items/remap-category', async (c) => {
+    const { oldColor, newColor } = await c.req.json().catch(() => ({}));
+    if (!oldColor || !newColor) return c.json({ updated: 0 });
+    const res = await db.run('UPDATE items SET category = ? WHERE category = ?', [newColor, oldColor]);
+    return c.json({ updated: res.changes || 0 });
+  });
+
+  // Break an item out of its sync group. A group of one is not a group, so the
+  // last one left is released too.
+  app.post('/api/items/sync-unlink', async (c) => {
+    const { itemId } = await c.req.json().catch(() => ({}));
+    const id = parseInt(itemId, 10);
+    const item = await getItem(db, id);
+    if (!item) return c.json({ error: 'Item not found' }, 404);
+    if (!item.syncGroup) return c.json({ updated: [] });
+
+    const group = item.syncGroup;
+    await db.run('UPDATE items SET syncGroup = NULL WHERE id = ?', [id]);
+    const updated = [await getItem(db, id)];
+
+    const remaining = await db.all('SELECT * FROM items WHERE syncGroup = ?', [group]);
+    if (remaining.length === 1) {
+      await db.run('UPDATE items SET syncGroup = NULL WHERE id = ?', [remaining[0].id]);
+      updated.push(await getItem(db, remaining[0].id));
+    }
+    return c.json({ updated });
+  });
+
+  // ── Backup ────────────────────────────────────────────────────────────────
+  // Builds the export on demand and hands it straight to the browser. The
+  // original wrote JSON files into a folder on the server, which cannot work on
+  // Cloudflare and, on a shop PC, left the backup on the same disk as the data
+  // it was protecting.
+  app.get('/api/backup/download', async (c) => {
+    const [items, cart, orders, categories, itemTypes, locations, activityLog, settings] = await Promise.all([
+      db.all('SELECT * FROM items ORDER BY id'),
+      db.all('SELECT * FROM cart'),
+      db.all('SELECT * FROM orders'),
+      db.all('SELECT * FROM categories'),
+      db.all('SELECT * FROM itemTypes'),
+      db.all('SELECT * FROM locations'),
+      db.all('SELECT * FROM activityLog ORDER BY timestamp DESC'),
+      db.all('SELECT * FROM settings'),
+    ]);
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    c.header('Content-Type', 'application/json');
+    c.header('Content-Disposition', `attachment; filename="kanban-backup-${stamp}.json"`);
+    return c.body(JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      shop: config.shopName,
+      counts: { items: items.length, cart: cart.length, orders: orders.length },
+      items, cart, orders, categories, itemTypes, locations, activityLog, settings,
+    }, null, 2));
   });
 
   // ── Screenshot import ─────────────────────────────────────────────────────

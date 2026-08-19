@@ -166,3 +166,114 @@ test('every config route is closed without a session', async () => {
     assert.equal((await call(path, { method: 'PUT', body: '{}' })).status, 401, `PUT ${path} should be protected`);
   }
 });
+
+const addItem = async (call, h, body) =>
+  (await call('/api/items', { method: 'POST', headers: h, body: JSON.stringify(body) })).json();
+
+test('duplicating an item links the pair and clears the copy\'s location', async () => {
+  const call = makeClient();
+  const h = await signIn(call);
+  const src = await addItem(call, h, { description: 'Carbide endmill', sku: 'EM-1', bin: 'Tool crib', minStock: 4 });
+  assert.equal(src.syncGroup, null);
+
+  const res = await call('/api/items/' + src.id + '/duplicate', { method: 'POST', headers: h });
+  assert.equal(res.status, 201);
+  const { item, sourceUpdated } = await res.json();
+
+  assert.notEqual(item.id, src.id);
+  assert.equal(item.description, 'Carbide endmill');
+  assert.equal(item.minStock, 4);
+  assert.equal(item.bin, '');                                // the copy lives elsewhere
+  assert.ok(item.syncGroup, 'the copy should carry a sync group');
+  assert.equal(sourceUpdated.syncGroup, item.syncGroup);     // and the original joins it
+
+  // A third copy joins the same group rather than starting a new one.
+  const third = (await (await call('/api/items/' + src.id + '/duplicate', { method: 'POST', headers: h })).json()).item;
+  assert.equal(third.syncGroup, item.syncGroup);
+});
+
+test('unlinking dissolves a group that would be left with one member', async () => {
+  const call = makeClient();
+  const h = await signIn(call);
+  const src = await addItem(call, h, { description: 'Drill', sku: 'DR-1' });
+  const copy = (await (await call('/api/items/' + src.id + '/duplicate', { method: 'POST', headers: h })).json()).item;
+
+  const { updated } = await (await call('/api/items/sync-unlink', {
+    method: 'POST', headers: h, body: JSON.stringify({ itemId: copy.id }),
+  })).json();
+
+  // Both are released: a group of one is not a group.
+  assert.equal(updated.length, 2);
+  for (const row of updated) assert.equal(row.syncGroup, null);
+
+  const after = await (await call('/api/items', { headers: h })).json();
+  assert.deepEqual(after.map((i) => i.syncGroup), [null, null]);
+});
+
+test('unlinking an item that is not in a group is a no-op, not an error', async () => {
+  const call = makeClient();
+  const h = await signIn(call);
+  const solo = await addItem(call, h, { description: 'Lonely', sku: 'X-1' });
+  const res = await call('/api/items/sync-unlink', {
+    method: 'POST', headers: h, body: JSON.stringify({ itemId: solo.id }),
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()).updated, []);
+
+  const missing = await call('/api/items/sync-unlink', {
+    method: 'POST', headers: h, body: JSON.stringify({ itemId: 9999 }),
+  });
+  assert.equal(missing.status, 404);
+});
+
+test('recolouring a cell moves exactly the items in it', async () => {
+  const call = makeClient();
+  const h = await signIn(call);
+  await addItem(call, h, { description: 'A', category: '#ff0000' });
+  await addItem(call, h, { description: 'B', category: '#ff0000' });
+  await addItem(call, h, { description: 'C', category: '#00ff00' });
+
+  const { updated } = await (await call('/api/items/remap-category', {
+    method: 'POST', headers: h, body: JSON.stringify({ oldColor: '#ff0000', newColor: '#0000ff' }),
+  })).json();
+  assert.equal(updated, 2);
+
+  const items = await (await call('/api/items', { headers: h })).json();
+  assert.deepEqual(items.map((i) => i.category), ['#0000ff', '#0000ff', '#00ff00']);
+
+  // Missing colours change nothing rather than wiping the column.
+  const none = await (await call('/api/items/remap-category', {
+    method: 'POST', headers: h, body: JSON.stringify({ oldColor: '', newColor: '#123456' }),
+  })).json();
+  assert.equal(none.updated, 0);
+});
+
+test('the backup download carries every table and names the file', async () => {
+  const call = makeClient();
+  const h = await signIn(call);
+  const item = await addItem(call, h, { description: 'Backed up', sku: 'BK-1' });
+  await call('/api/cart', { method: 'POST', headers: h, body: JSON.stringify({ itemId: item.id }) });
+
+  const res = await call('/api/backup/download', { headers: h });
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-disposition'), /attachment; filename="kanban-backup-.*\.json"/);
+
+  const dump = await res.json();
+  for (const table of ['items', 'cart', 'orders', 'categories', 'itemTypes', 'locations', 'activityLog', 'settings']) {
+    assert.ok(Array.isArray(dump[table]), `${table} missing from the backup`);
+  }
+  assert.equal(dump.items.length, 1);
+  assert.equal(dump.items[0].description, 'Backed up');
+  assert.equal(dump.cart.length, 1);
+  assert.equal(dump.counts.items, 1);
+  assert.ok(dump.exportedAt, 'the export should be dated');
+});
+
+test('the import and scrape routes are closed without a session', async () => {
+  const call = makeClient();
+  for (const path of ['/api/scrape-url', '/api/import-url', '/api/items/remap-category', '/api/items/sync-unlink']) {
+    assert.equal((await call(path, { method: 'POST', body: '{}' })).status, 401, `${path} should be protected`);
+  }
+  assert.equal((await call('/api/backup/download')).status, 401);
+  assert.equal((await call('/api/screenshot-import', { method: 'POST', body: '{}' })).status, 401);
+});

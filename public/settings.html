@@ -243,12 +243,12 @@ input[type=color]{padding:2px 4px;width:48px;height:34px;cursor:pointer;border-r
     <div class="setting-row">
       <div class="setting-info">
         <div class="setting-label">Full system backup</div>
-        <div class="setting-desc">Downloads a complete backup including inventory, categories, item types, order queue, and receiving history. Backups also run automatically every 24 hours and are saved to the <code style="font-family:var(--mono);font-size:11px;background:var(--bg);padding:1px 5px;border-radius:3px">backups/</code> folder.</div>
+        <div class="setting-desc">Downloads everything as a single JSON file — inventory, cells, item types, locations, the order queue, receiving history and the activity log.<br><br>
+        <b>Nothing is backed up for you.</b> Keep the downloaded file somewhere other than the machine running this app: if that box dies, a copy sitting on its own disk dies with it.</div>
       </div>
       <div class="setting-control">
         <div style="display:flex;gap:8px">
           <button class="btn btn-ghost" onclick="downloadBackup()" style="font-size:13px;padding:7px 14px">⬇ Download Backup</button>
-          <button class="btn btn-ghost" onclick="runBackupNow()" style="font-size:13px;padding:7px 14px">Run Now</button>
         </div>
       </div>
     </div>
@@ -564,12 +564,6 @@ function updateFavicon() {
 updateFavicon();
 function downloadBackup() {
   window.location.href = '/api/backup/download';
-}
-
-async function runBackupNow() {
-  const res = await fetch('/api/backup', { method: 'POST' });
-  const data = await res.json();
-  showFlash(data.ok ? '✓ Backup saved to backups/ folder' : '✗ Backup failed');
 }
 
 </script>
