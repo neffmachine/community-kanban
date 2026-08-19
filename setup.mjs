@@ -3,6 +3,7 @@
 // (free cloud). Writes the config you need and prints the exact next commands.
 //
 //   npm run setup
+import './src/check-node.mjs';
 import { createInterface } from 'node:readline';
 import { stdin, stdout } from 'node:process';
 import { randomBytes } from 'node:crypto';

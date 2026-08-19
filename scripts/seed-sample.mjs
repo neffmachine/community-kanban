@@ -8,6 +8,7 @@
 // back out without touching anything you have added yourself. It refuses to run
 // against a database that already holds items it did not create, so nobody
 // seeds demo parts on top of a real crib.
+import '../src/check-node.mjs';
 import { createSqliteDb } from '../src/db/sqlite.mjs';
 import { loadConfig } from '../src/config.mjs';
 
@@ -29,19 +30,23 @@ const TYPES = {
 
 const LOCATIONS = ['TOOL CRIB', 'BAY 1', 'SHELF A'];
 
-// Five items, every one labelled SAMPLE in both the description and the part
-// number so nobody mistakes them for real stock. Three are tool-crib items and
-// two are not, which gives the Tools / Other toggle both sides; one sits in the
-// order queue and one is on order, so neither of those screens reads empty.
+// Five items, every one labelled SAMPLE so nobody mistakes them for real stock.
+// The label goes at the END of the description and the part number, not the
+// front: the tool card prints the start of the description large, and that space
+// belongs to the T-number, not to the word SAMPLE.
+//
+// Three are tool-crib items and two are not, which gives the Tools / Other
+// toggle both sides; one sits in the order queue and one is on order, so
+// neither of those screens reads empty.
 //
 // description, sku, supplier, itemType, category, bin, minStock, reorderQty,
 // minUnit, reorderUnit, price, status
 const ITEMS = [
-  ['SAMPLE — T101 1/4" 4FL carbide end mill', 'SAMPLE-EM-250', 'Lakeshore Carbide', 'End mill', '#d97706', 'TOOL CRIB', 4, 10, 'ea', 'box of 10', 28.5, 'ok'],
-  ['SAMPLE — T110 #7 jobber drill', 'SAMPLE-DR-7', 'Grainger', 'Drill', '#f59e0b', 'TOOL CRIB', 5, 10, 'ea', 'pack of 10', 6.4, 'reorder'],
-  ['SAMPLE — T120 CNMG 432 insert', 'SAMPLE-CNMG-432', 'MSC Direct', 'Insert', '#0ea5e9', 'BAY 1', 10, 10, 'ea', 'box of 10', 9.75, 'ordered'],
-  ['SAMPLE — Way oil ISO 68', 'SAMPLE-OIL-68', 'Grainger', '', '#4d7c0f', 'SHELF A', 2, 4, 'gal', 'case of 4', 34.0, 'ok'],
-  ['SAMPLE — Blue shop towels', 'SAMPLE-TWL', 'Uline', '', '#4d7c0f', 'SHELF A', 6, 12, 'roll', 'case of 12', 3.1, 'ok'],
+  ['T101 1/4" 4FL carbide end mill (SAMPLE)', 'EM-250-SAMPLE', 'Lakeshore Carbide', 'End mill', '#d97706', 'TOOL CRIB', 4, 10, 'ea', 'box of 10', 28.5, 'ok'],
+  ['T110 #7 jobber drill (SAMPLE)', 'DR-7-SAMPLE', 'Grainger', 'Drill', '#f59e0b', 'TOOL CRIB', 5, 10, 'ea', 'pack of 10', 6.4, 'reorder'],
+  ['T120 CNMG 432 insert (SAMPLE)', 'CNMG-432-SAMPLE', 'MSC Direct', 'Insert', '#0ea5e9', 'BAY 1', 10, 10, 'ea', 'box of 10', 9.75, 'ordered'],
+  ['Way oil ISO 68 (SAMPLE)', 'OIL-68-SAMPLE', 'Grainger', '', '#4d7c0f', 'SHELF A', 2, 4, 'gal', 'case of 4', 34.0, 'ok'],
+  ['Blue shop towels (SAMPLE)', 'TWL-SAMPLE', 'Uline', '', '#4d7c0f', 'SHELF A', 6, 12, 'roll', 'case of 12', 3.1, 'ok'],
 ];
 
 // Card images. Drawn here as inline SVG rather than linked from anywhere, so
@@ -49,24 +54,24 @@ const ITEMS = [
 // print cleanly at any card size. Each carries its own light tile so it reads
 // on a dark screen and on white card stock alike.
 const SHAPES = {
-  'SAMPLE-EM-250': // end mill: shank above a fluted cutting length
+  'EM-250-SAMPLE': // end mill: shank above a fluted cutting length
     '<rect x="26" y="8" width="12" height="20" rx="1.5" fill="#9ca3af"/>' +
     '<rect x="24" y="27" width="16" height="30" rx="2" fill="#4b5563"/>' +
     '<path d="M26 31l12 6M26 39l12 6M26 47l12 6" stroke="#e5e7eb" stroke-width="2.5" stroke-linecap="round"/>',
-  'SAMPLE-DR-7': // twist drill: shank, spiral flutes, 118-degree point
+  'DR-7-SAMPLE': // twist drill: shank, spiral flutes, 118-degree point
     '<rect x="27" y="8" width="10" height="16" rx="1.5" fill="#9ca3af"/>' +
     '<rect x="26" y="23" width="12" height="26" rx="1.5" fill="#4b5563"/>' +
     '<path d="M27 27l10 7M27 35l10 7M27 43l10 7" stroke="#e5e7eb" stroke-width="2.5" stroke-linecap="round"/>' +
     '<path d="M26 49l6 8 6-8z" fill="#4b5563"/>',
-  'SAMPLE-CNMG-432': // turning insert: rhombus with a clamp hole
+  'CNMG-432-SAMPLE': // turning insert: rhombus with a clamp hole
     '<path d="M32 14l20 18-20 18-20-18z" fill="#4b5563"/>' +
     '<circle cx="32" cy="32" r="6" fill="#e5e7eb"/>',
-  'SAMPLE-OIL-68': // oil jug with a handle and a label
+  'OIL-68-SAMPLE': // oil jug with a handle and a label
     '<path d="M22 24h20a4 4 0 014 4v24a4 4 0 01-4 4H22a4 4 0 01-4-4V28a4 4 0 014-4z" fill="#4b5563"/>' +
     '<rect x="28" y="12" width="8" height="12" rx="1.5" fill="#9ca3af"/>' +
     '<rect x="23" y="34" width="18" height="12" rx="1.5" fill="#e5e7eb"/>' +
     '<path d="M46 32h4a4 4 0 010 8h-4" fill="none" stroke="#4b5563" stroke-width="3"/>',
-  'SAMPLE-TWL': // towel roll seen end-on
+  'TWL-SAMPLE': // towel roll seen end-on
     '<rect x="16" y="18" width="32" height="30" rx="4" fill="#4b5563"/>' +
     '<ellipse cx="32" cy="18" rx="16" ry="5" fill="#9ca3af"/>' +
     '<ellipse cx="32" cy="18" rx="5" ry="2" fill="#e5e7eb"/>' +
@@ -163,7 +168,7 @@ async function seed(db) {
   }
 
   console.log(`\n  Added ${ITEMS.length} sample items across ${Object.keys(CELLS).length} cells.`);
-  console.log('  Every one is labelled SAMPLE, in the description and the part number.');
+  console.log('  Each is labelled (SAMPLE) at the end, so the T-number still prints large on the card.');
   console.log('  3 are tool-crib items and 2 are not, so the Tools / Other toggle has both sides.');
   console.log('  1 sits in the order queue and 1 is on order, so those screens are not empty.');
   console.log('  Each has a drawn card image, embedded rather than linked, so it works offline.');
