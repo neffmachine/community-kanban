@@ -357,7 +357,7 @@ tbody tr:hover .row-actions{opacity:1}
   <div class="header-left">
     <a href="/" class="logo">
       <span class="logo-dot" id="logoDot"></span>
-      <span id="logoText">YOUR SHOP / INVENTORY</span><span class="logo-ver" style="font-size:10px;opacity:.4;margin-left:8px;font-weight:400">v174</span>
+      <span id="logoText">YOUR SHOP / INVENTORY</span><span class="logo-ver" style="font-size:10px;opacity:.4;margin-left:8px;font-weight:400">v0.1.0</span>
     </a>
   </div>
   <div class="header-right">
@@ -1225,8 +1225,23 @@ let currentSyncGroup = null;
 let scanBuffer = '', scanTimer = null;
 
 // ── Settings ──────────────────────────────────────────
-function loadSettings() {
+async function loadSettings() {
   settings = JSON.parse(localStorage.getItem('kanban_settings')||'{}');
+  // First run on this browser: take the shop name the setup wizard put in the
+  // server's config, so naming your shop during setup actually shows up here.
+  // Once it's set locally the Settings page owns it and the server is not asked.
+  if (!settings.shopName) {
+    try {
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const remote = await res.json();
+        if (remote.shopName) {
+          settings.shopName = remote.shopName;
+          localStorage.setItem('kanban_settings', JSON.stringify(settings));
+        }
+      }
+    } catch (e) { /* offline or signed out — fall back to the default below */ }
+  }
   const accent = settings.accentColor || '#c4351c';
   document.documentElement.style.setProperty('--accent', accent);
   if (settings.fontSize) document.body.style.fontSize = settings.fontSize;
@@ -1239,7 +1254,7 @@ function loadSettings() {
 
 // ── Data ──────────────────────────────────────────────
 async function load() {
-  loadSettings();
+  await loadSettings();
   const [ir, cr, or_, tr, catr, locr] = await Promise.all([fetch('/api/items'), fetch('/api/cart'), fetch('/api/orders'), fetch('/api/types'), fetch('/api/categories'), fetch('/api/locations')]);
   items = await ir.json();
   const cd = await cr.json();
@@ -1576,7 +1591,14 @@ function renderItems() {
     ?`Showing ${filtered.length} of ${items.length} items`:`${items.length} items`;
   const tbody=document.getElementById('itemsBody');
   if(!filtered.length){
-    tbody.innerHTML=`<tr><td colspan="9"><div class="empty"><div class="empty-icon">◫</div><h3>No items match</h3></div></td></tr>`;
+    const nothingYet = items.length === 0;
+    tbody.innerHTML=`<tr><td colspan="9"><div class="empty"><div class="empty-icon">◫</div>`
+      + (nothingYet
+        ? `<h3>No items yet</h3><p style="margin:6px 0 0;font-size:13px;opacity:.7">`
+          + `Add your first with <b>+ Add Item</b> — or run <code>npm run seed:sample</code> to load five examples.</p>`
+        : `<h3>No items match</h3><p style="margin:6px 0 0;font-size:13px;opacity:.7">`
+          + `Try clearing the search or the filters.</p>`)
+      + `</div></td></tr>`;
     return;
   }
   tbody.innerHTML=filtered.map(item=>{
