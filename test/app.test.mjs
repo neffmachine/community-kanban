@@ -119,10 +119,11 @@ test('cells round-trip as a colour-keyed map, subtypes included', async () => {
   const after = await (await call('/api/categories', { headers: h })).json();
   assert.deepEqual(Object.keys(after), ['#0000ff']);
 
-  // No shape validation: a PUT replaces the map with whatever it can iterate,
-  // so an empty payload clears the cells rather than being rejected.
-  await call('/api/categories', { method: 'PUT', headers: h, body: '[]' });
-  assert.deepEqual(await (await call('/api/categories', { headers: h })).json(), {});
+  // A malformed body is refused rather than obeyed — it would otherwise empty
+  // the collection, since a PUT replaces it wholesale.
+  const before = await (await call('/api/categories', { headers: h })).json();
+  assert.equal((await call('/api/categories', { method: 'PUT', headers: h, body: '[]' })).status, 400);
+  assert.deepEqual(await (await call('/api/categories', { headers: h })).json(), before, 'cells survived a bad request');
 });
 
 test('item types round-trip and default their colour', async () => {
@@ -136,6 +137,10 @@ test('item types round-trip and default their colour', async () => {
   });
   // Replaces wholesale rather than merging.
   await call('/api/types', { method: 'PUT', headers: h, body: JSON.stringify({ Drill: {} }) });
+  assert.deepEqual(await (await call('/api/types', { headers: h })).json(), { Drill: { color: '#6b7280' } });
+  // A string body used to be iterated character by character, creating types
+  // named 0, 1, 2… Now it is refused and the existing types survive.
+  assert.equal((await call('/api/types', { method: 'PUT', headers: h, body: '"nope"' })).status, 400);
   assert.deepEqual(await (await call('/api/types', { headers: h })).json(), { Drill: { color: '#6b7280' } });
 });
 
@@ -154,9 +159,9 @@ test('locations round-trip as a list and replace wholesale', async () => {
   await call('/api/locations', { method: 'PUT', headers: h, body: JSON.stringify(['Bay 1', 'Bay 1']) });
   assert.deepEqual(await (await call('/api/locations', { headers: h })).json(), ['Bay 1']);
 
-  // A non-array clears the list — worth knowing, since the UI sends the whole set.
-  await call('/api/locations', { method: 'PUT', headers: h, body: '{}' });
-  assert.deepEqual(await (await call('/api/locations', { headers: h })).json(), []);
+  // A non-array is refused, so a bad request cannot wipe the list.
+  assert.equal((await call('/api/locations', { method: 'PUT', headers: h, body: '{}' })).status, 400);
+  assert.deepEqual(await (await call('/api/locations', { headers: h })).json(), ['Bay 1']);
 });
 
 test('every config route is closed without a session', async () => {

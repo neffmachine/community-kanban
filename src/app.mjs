@@ -277,7 +277,13 @@ export function createApp({ db, config }) {
   });
 
   app.put('/api/categories', async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await c.req.json().catch(() => null);
+    // These replace the whole collection, so a malformed body would empty it.
+    // The original had no check — behind a company SSO gate that was survivable;
+    // published, a bad request should be refused rather than obeyed.
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return c.json({ error: 'Expected an object keyed by colour' }, 400);
+    }
     const statements = [['DELETE FROM categories', []]];
     for (const [color, val] of Object.entries(body)) {
       const label = (typeof val === 'object' && val) ? (val.label || '') : String(val);
@@ -295,7 +301,10 @@ export function createApp({ db, config }) {
   });
 
   app.put('/api/types', async (c) => {
-    const body = await c.req.json().catch(() => ({}));
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return c.json({ error: 'Expected an object keyed by type name' }, 400);
+    }
     const statements = [['DELETE FROM itemTypes', []]];
     for (const [name, val] of Object.entries(body)) {
       const color = ((typeof val === 'object' && val) ? val.color : val) || '#6b7280';
@@ -309,8 +318,9 @@ export function createApp({ db, config }) {
     c.json((await db.all('SELECT name FROM locations')).map((r) => r.name)));
 
   app.put('/api/locations', async (c) => {
-    const body = await c.req.json().catch(() => ([]));
-    const list = Array.isArray(body) ? body : [];
+    const body = await c.req.json().catch(() => null);
+    if (!Array.isArray(body)) return c.json({ error: 'Expected an array of names' }, 400);
+    const list = body;
     const statements = [['DELETE FROM locations', []]];
     for (const name of list) statements.push(['INSERT OR IGNORE INTO locations (name) VALUES (?)', [name]]);
     await runAll(db, statements);
