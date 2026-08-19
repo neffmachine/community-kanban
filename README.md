@@ -17,9 +17,21 @@ The same code runs both ways. Only where the data lives changes.
 
 ## Quick start
 
-Requires **Node 22 or newer** — check with `node --version`, and grab the LTS
-installer from [nodejs.org](https://nodejs.org) if you're behind. The app tells
-you plainly if your Node is too old.
+You need **Node 22 or newer** — the LTS installer from
+[nodejs.org](https://nodejs.org) is all it takes. Everything else is handled
+for you.
+
+**The easy way.** Download this repository (green **Code** button → **Download
+ZIP**), unzip it, and double-click:
+
+- **Start Community Kanban.command** on a Mac — the first time, right-click it
+  and choose *Open*, to clear the "unidentified developer" warning
+- **Start Community Kanban.bat** on Windows
+
+It installs what's needed, asks a few setup questions, offers to load some
+sample parts, then starts the app and opens your browser.
+
+**The terminal way**, if you'd rather:
 
 ```bash
 npm install
@@ -28,9 +40,11 @@ npm run dev        # local only — Cloudflare prints its own next steps
 ```
 
 Then open `http://localhost:8080` and sign in with the shop password you chose.
-Other devices on your wifi use `http://<that-machine's-ip>:8080`.
+Other devices on your wifi use `http://<that-machine's-ip>:8080` — and that's
+the address to use if you want to scan a printed card with a phone, since the
+QR code points at whatever address you were browsing.
 
-Want to see it working before you type in real parts:
+Sample data, any time:
 
 ```bash
 npm run seed:sample            # five clearly-labelled example items
@@ -100,6 +114,7 @@ responsible for your backups.
 ## What's in the box
 
 ```
+Start Community Kanban.command / .bat   Double-click launcher (macOS / Windows)
 setup.mjs              Setup wizard (local vs Cloudflare)
 server.mjs             Local host entry (Node + node:sqlite)
 functions/             Cloudflare host entry (Pages Functions + D1)
