@@ -15,6 +15,7 @@ import { Hono } from 'hono';
 import QRCode from 'qrcode';
 import { normalizeItemInput, applyUpdate, publicReorderView, buildReverse } from './items.mjs';
 import { checkPassword, makeSession, requireAuth } from './auth.mjs';
+import { importFromScreenshot, howToAddKey } from './screenshot-import.mjs';
 
 const ITEM_INSERT_COLS = ['sku', 'description', 'supplier', 'minStock', 'reorderQty', 'minUnit',
   'reorderUnit', 'price', 'bin', 'url', 'itemType', 'category', 'photo', 'physicalReorder', 'status', 'createdAt'];
@@ -340,6 +341,23 @@ export function createApp({ db, config }) {
     await db.run('UPDATE activityLog SET reversed = 1 WHERE id = ?', [entry.id]);
     return c.json({ ok: true });
   });
+
+  // ── Screenshot import ─────────────────────────────────────────────────────
+  // Off unless this shop has set its own ANTHROPIC_API_KEY. The key is never
+  // stored by the app — only read from the environment — so it can't end up in
+  // a backup or a database dump.
+  app.post('/api/screenshot-import', async (c) => {
+    const { image, mediaType } = await c.req.json().catch(() => ({}));
+    const { status, body } = await importFromScreenshot({ image, mediaType, config });
+    return c.json(body, status);
+  });
+
+  // Whether a key is configured — never the key itself. The Settings page uses
+  // this to show either "connected" or instructions for connecting one.
+  app.get('/api/settings/anthropic-key', (c) => c.json({
+    hasKey: !!config.anthropicKey,
+    howTo: config.anthropicKey ? null : howToAddKey(config.hostMode),
+  }));
 
   // ── Settings ──────────────────────────────────────────────────────────────
   app.get('/api/settings', async (c) => {

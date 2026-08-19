@@ -18,6 +18,7 @@ export const onRequest = (context) => {
     shopPassword: env.SHOP_PASSWORD || '',
     sessionSecret: env.SESSION_SECRET || '',
     anthropicKey: env.ANTHROPIC_API_KEY || '',
+    anthropicModel: env.ANTHROPIC_MODEL || '',
   };
   const db = createD1Db(env.DB);
   const app = createApp({ db, config });

@@ -11,6 +11,7 @@ export function loadConfig() {
     shopPassword: env.SHOP_PASSWORD || '',
     sessionSecret: env.SESSION_SECRET || '',
     anthropicKey: env.ANTHROPIC_API_KEY || '', // optional; enables screenshot import
+    anthropicModel: env.ANTHROPIC_MODEL || '',  // optional; overrides the default
   };
   if (!config.shopPassword || !config.sessionSecret) {
     console.error('\n  Missing SHOP_PASSWORD or SESSION_SECRET.');

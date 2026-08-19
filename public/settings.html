@@ -213,7 +213,9 @@ input[type=color]{padding:2px 4px;width:48px;height:34px;cursor:pointer;border-r
     <div class="setting-row">
       <div class="setting-info">
         <div class="setting-label">Anthropic API Key</div>
-        <div class="setting-desc">Enables pasting screenshots into the Add Item form to auto-fill product info from any supplier. Get a key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent)">console.anthropic.com</a></div>
+        <div class="setting-desc">Optional. Lets you paste a product screenshot into Add Item and have the description, part number, vendor and price filled in for you.<br><br>
+        <b>You use your own key and pay for your own usage.</b> There is no shared key and nothing is billed to anyone else. Without a key the rest of the app works exactly the same — this one feature is simply off. Get a key at <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent)">console.anthropic.com</a>.<br><br>
+        The key is read from this server's environment and is never saved into your inventory data, so it can't end up in a backup or an export.</div>
       </div>
       <div class="setting-control" style="display:flex;flex-direction:column;gap:5px;align-items:flex-end;max-width:300px">
         <span id="apiKeyStatus" style="font-size:13px;font-weight:600;color:var(--muted)">Checking…</span>
@@ -408,14 +410,19 @@ async function loadApiKey() {
   const hint = document.getElementById('apiKeyHint');
   try {
     const res = await fetch('/api/settings/anthropic-key');
-    const { hasKey } = await res.json();
+    const { hasKey, howTo } = await res.json();
     if (hasKey) {
-      status.textContent = '✓ Configured';
+      status.textContent = '\u2713 Connected';
       status.style.color = '#1e6b3e';
       hint.textContent = 'Paste a product screenshot in Add Item to auto-fill the fields.';
     } else {
-      status.textContent = 'Not configured';
+      status.textContent = 'Not connected';
       status.style.color = 'var(--muted)';
+      // The server knows which host this is, so it can give the exact steps
+      // rather than making someone guess between .env and Cloudflare secrets.
+      hint.textContent = howTo || 'Add an ANTHROPIC_API_KEY to enable screenshot import.';
+      hint.style.whiteSpace = 'normal';
+      hint.style.textAlign = 'right';
     }
   } catch(e) {
     status.textContent = 'Status unavailable';
