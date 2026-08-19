@@ -77,8 +77,8 @@ if (mode === 'local') {
   Then open http://localhost:${port} and sign in with your shop password.
   Other devices on your wifi use http://<this-machine-ip>:${port}.
 
-  Want to see it with data first? `npm run seed:sample` loads five clearly
-  labelled example items, and `npm run seed:sample -- --clear` removes them.
+  Want to see it with data first? Run 'npm run seed:sample' to load five
+  clearly labelled example items; add -- --clear to remove them again.
 `);
 } else {
   const project = await ask('\n  Cloudflare project name (lowercase, no spaces)', 'community-kanban');
