@@ -22,14 +22,32 @@ You need **Node 22 or newer** — the LTS installer from
 for you.
 
 **The easy way.** Download this repository (green **Code** button → **Download
-ZIP**), unzip it, and double-click:
+ZIP**) and unzip it somewhere you'll find again — your data will live in that
+folder, so not Downloads.
 
-- **Start Community Kanban.command** on a Mac — the first time, right-click it
-  and choose *Open*, to clear the "unidentified developer" warning
-- **Start Community Kanban.bat** on Windows
+**On Windows**, double-click **Start Community Kanban.bat**. If Windows says
+"Windows protected your PC", choose *More info → Run anyway*. If a firewall
+prompt appears, click **Allow**, or phones won't be able to reach the app.
 
-It installs what's needed, asks a few setup questions, offers to load some
-sample parts, then starts the app and opens your browser.
+**On a Mac**, macOS blocks scripts that came from the internet — you'll get
+*"Apple could not verify… is free of malware"*, and on current macOS that
+dialog has no "Open Anyway" button. So the **first time only**, start it from
+Terminal instead:
+
+1. Open Terminal (Cmd+Space, type "terminal")
+2. Type `bash ` — b, a, s, h, space
+3. Drag **Start Community Kanban.command** onto the Terminal window
+4. Press Return
+
+That first run clears the block for the whole folder, so afterwards you can
+just double-click it — and the background-service files beside it — like
+normal. (If you'd rather not touch Terminal: double-click it, dismiss the
+warning, then go to **System Settings → Privacy & Security**, scroll down and
+click **Open Anyway**. You'll need to repeat that for each file, which is why
+the Terminal route is one step instead of three.)
+
+Either way it installs what's needed, asks a few setup questions, offers to
+load some sample parts, then starts the app and opens your browser.
 
 **The terminal way**, if you'd rather:
 
@@ -59,6 +77,9 @@ depend on. Once you've decided to keep it, double-click:
 
 - **Install as background service.command** (macOS)
 - **Install as background service.bat** (Windows)
+
+On a Mac these double-click normally, provided you've already done the
+first-run step above — it cleared the block for every file in the folder.
 
 After that it starts when the machine logs in, runs with no window open, and
 restarts itself if it ever stops. Close every terminal you like.

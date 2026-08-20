@@ -12,6 +12,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
 cd "$(dirname "$0")" || exit 1
 
+# macOS tags anything unzipped from a download as quarantined, and refuses to
+# launch it by double-click — the "Apple could not verify..." dialog, which on
+# current macOS has no "Open Anyway" button at all. Running this file from a
+# Terminal works regardless, so if we got here we can clear the flag for the
+# whole folder. That makes this and its sibling .command files double-clickable
+# from now on, instead of needing the dance once per file.
+xattr -dr com.apple.quarantine . 2>/dev/null
+
 LABEL="com.communitykanban.server"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 LOG="$HOME/Library/Logs/CommunityKanban.log"
